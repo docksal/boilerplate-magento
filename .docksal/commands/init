@@ -105,4 +105,5 @@ fi
 
 echo -en "${green_bg} DONE! ${NC} "
 echo -e "Open ${yellow}http://${VIRTUAL_HOST}${NC} in your browser to verify the setup."
-echo -e "Username: ${yellow}${MAGENTO_ADMIN_USER}${NC}; password: ${yellow}${MAGENTO_ADMIN_PASS}${NC}."
+echo -e "Magento Admin URL is in the output above."
+echo -e "Admin username: ${yellow}${MAGENTO_ADMIN_USER}${NC}; password: ${yellow}${MAGENTO_ADMIN_PASS}${NC}."
