@@ -32,9 +32,7 @@ Follow [Docksal environment setup instructions](http://docksal.readthedocs.io/en
     fin init
     ```
 
-3. **On Windows** add `192.168.64.100  vanilla.magento.docksal` to your hosts file
-
-4. Point your browser to
+3. Point your browser to
 
     ```
     http://vanilla.magento.docksal
