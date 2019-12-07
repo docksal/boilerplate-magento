@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -49,6 +49,13 @@ class Modal extends Block
     protected $acceptWarningSelector = '.action-primary';
 
     /**
+     * Locator value for decline warning button.
+     *
+     * @var string
+     */
+    protected $dismissWarningSelector = '.action-secondary';
+
+    /**
      * Modal overlay selector.
      *
      * @var string
@@ -82,6 +89,18 @@ class Modal extends Block
     {
         $this->waitModalAnimationFinished();
         $this->_rootElement->find($this->acceptWarningSelector)->click();
+        $this->waitForElementNotVisible($this->loadingMask);
+    }
+
+    /**
+     * Press Cancel on a warning popup.
+     *
+     * @return void
+     */
+    public function dismissWarning()
+    {
+        $this->waitModalAnimationFinished();
+        $this->_rootElement->find($this->dismissWarningSelector)->click();
         $this->waitForElementNotVisible($this->loadingMask);
     }
 
@@ -131,7 +150,7 @@ class Modal extends Block
     }
 
     /**
-     * Wait until modal window will disapper.
+     * Wait until modal window will disappear.
      *
      * @return void
      */
@@ -145,12 +164,36 @@ class Modal extends Block
     }
 
     /**
+     * Dismiss the modal if it appears
+     *
+     * @return void
+     */
+    public function dismissIfModalAppears()
+    {
+        $browser = $this->browser;
+        $selector = $this->dismissWarningSelector;
+        $browser->waitUntil(
+            function () use ($browser, $selector) {
+                $item = $browser->find($selector);
+                if ($item->isVisible()) {
+                    return true;
+                }
+                $this->waitModalAnimationFinished();
+                return true;
+            }
+        );
+        if ($this->browser->find($selector)->isVisible()) {
+            $this->browser->find($selector)->click();
+        }
+    }
+
+    /**
      * Waiting until CSS animation is done.
      * Transition-duration is set at this file: "<magento_root>/lib/web/css/source/components/_modals.less"
      *
      * @return void
      */
-    private function waitModalAnimationFinished()
+    protected function waitModalAnimationFinished()
     {
         usleep(500000);
     }

@@ -13,7 +13,6 @@ set -e
 # The following variables are configured in the '.env' file: DOCROOT, VIRTUAL_HOST.
 
 DOCROOT_PATH="${PROJECT_ROOT}/${DOCROOT}"
-BIN_PATH="${DOCROOT_PATH}/bin"
 
 #-------------------------- END: Settings --------------------------------
 
@@ -38,8 +37,8 @@ echo-yellow () { echo -e "${yellow}$1${NC}"; }
 # Install site
 site_install ()
 {
-    cd $BIN_PATH
-    fin exec "php ./magento setup:install \
+    cd $DOCROOT_PATH
+    fin exec "php bin/magento setup:install \
     --base-url=http://${VIRTUAL_HOST} \
     --db-host=${MAGENTO_DB_HOST} \
     --db-name=${MYSQL_DATABASE} \

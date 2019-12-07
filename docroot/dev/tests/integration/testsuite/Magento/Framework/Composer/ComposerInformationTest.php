@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -12,7 +12,7 @@ use Magento\TestFramework\Helper\Bootstrap;
 /**
  * Tests Magento\Framework\ComposerInformation
  */
-class ComposerInformationTest extends \PHPUnit_Framework_TestCase
+class ComposerInformationTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var \Magento\Framework\ObjectManagerInterface
@@ -53,12 +53,12 @@ class ComposerInformationTest extends \PHPUnit_Framework_TestCase
         ];
 
         $this->directoryList = $this->objectManager->create(
-            'Magento\Framework\App\Filesystem\DirectoryList',
+            \Magento\Framework\App\Filesystem\DirectoryList::class,
             ['root' => __DIR__ . '/_files/' . $composerDir, 'config' => $directories]
         );
 
         $this->filesystem = $this->objectManager->create(
-            'Magento\Framework\Filesystem',
+            \Magento\Framework\Filesystem::class,
             ['directoryList' => $this->directoryList]
         );
 
@@ -77,11 +77,11 @@ class ComposerInformationTest extends \PHPUnit_Framework_TestCase
 
         /** @var \Magento\Framework\Composer\ComposerInformation $composerInfo */
         $composerInfo = $this->objectManager->create(
-            'Magento\Framework\Composer\ComposerInformation',
+            \Magento\Framework\Composer\ComposerInformation::class,
             ['composerFactory' => $this->composerFactory]
         );
 
-        $this->assertEquals("~5.5.0|~5.6.0|~7.0.0", $composerInfo->getRequiredPhpVersion());
+        $this->assertEquals("~7.1.3||~7.2.0", $composerInfo->getRequiredPhpVersion());
     }
 
     /**
@@ -92,11 +92,11 @@ class ComposerInformationTest extends \PHPUnit_Framework_TestCase
     public function testGetRequiredExtensions($composerDir)
     {
         $this->setupDirectory($composerDir);
-        $expectedExtensions = ['ctype', 'gd', 'spl', 'dom', 'simplexml', 'mcrypt', 'hash', 'curl', 'iconv', 'intl'];
+        $expectedExtensions = ['ctype', 'gd', 'spl', 'dom', 'simplexml', 'hash', 'curl', 'iconv', 'intl'];
 
         /** @var \Magento\Framework\Composer\ComposerInformation $composerInfo */
         $composerInfo = $this->objectManager->create(
-            'Magento\Framework\Composer\ComposerInformation',
+            \Magento\Framework\Composer\ComposerInformation::class,
             ['composerFactory' => $this->composerFactory]
         );
 
@@ -115,7 +115,7 @@ class ComposerInformationTest extends \PHPUnit_Framework_TestCase
     {
         $this->setupDirectory($composerDir);
         $composerInfo = $this->objectManager->create(
-            'Magento\Framework\Composer\ComposerInformation',
+            \Magento\Framework\Composer\ComposerInformation::class,
             ['composerFactory' => $this->composerFactory]
         );
         $actualSuggestedExtensions = $composerInfo->getSuggestedPackages();
@@ -133,7 +133,7 @@ class ComposerInformationTest extends \PHPUnit_Framework_TestCase
 
         /** @var \Magento\Framework\Composer\ComposerInformation $composerInfo */
         $composerInfo = $this->objectManager->create(
-            'Magento\Framework\Composer\ComposerInformation',
+            \Magento\Framework\Composer\ComposerInformation::class,
             ['composerFactory' => $this->composerFactory]
         );
 
@@ -163,7 +163,7 @@ class ComposerInformationTest extends \PHPUnit_Framework_TestCase
 
         /** @var \Magento\Framework\Composer\ComposerInformation $composerInfo */
         $composerInfo = $this->objectManager->create(
-            'Magento\Framework\Composer\ComposerInformation',
+            \Magento\Framework\Composer\ComposerInformation::class,
             ['composerFactory' => $this->composerFactory]
         );
 
@@ -184,7 +184,7 @@ class ComposerInformationTest extends \PHPUnit_Framework_TestCase
 
         /** @var \Magento\Framework\Composer\ComposerInformation $composerInfo */
         $composerInfo = $this->objectManager->create(
-            'Magento\Framework\Composer\ComposerInformation',
+            \Magento\Framework\Composer\ComposerInformation::class,
             ['composerFactory' => $this->composerFactory]
         );
         if ($composerDir === 'testFromCreateProject') {
@@ -205,7 +205,7 @@ class ComposerInformationTest extends \PHPUnit_Framework_TestCase
 
         /** @var \Magento\Framework\Composer\ComposerInformation $composerInfo */
         $composerInfo = $this->objectManager->create(
-            'Magento\Framework\Composer\ComposerInformation',
+            \Magento\Framework\Composer\ComposerInformation::class,
             ['composerFactory' => $this->composerFactory]
         );
         if ($composerDir === 'testFromClone') {
