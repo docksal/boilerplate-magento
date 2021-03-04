@@ -1,10 +1,8 @@
 <?php
 /**
- * Zend Framework (http://framework.zend.com/)
- *
- * @link      http://github.com/zendframework/zf2 for the canonical source repository
- * @copyright Copyright (c) 2005-2015 Zend Technologies USA Inc. (http://www.zend.com)
- * @license   http://framework.zend.com/license/new-bsd New BSD License
+ * @see       https://github.com/zendframework/zend-http for the canonical source repository
+ * @copyright Copyright (c) 2005-2017 Zend Technologies USA Inc. (http://www.zend.com)
+ * @license   https://github.com/zendframework/zend-http/blob/master/LICENSE.md New BSD License
  */
 
 namespace Zend\Http\Header;
@@ -27,8 +25,8 @@ class Connection implements HeaderInterface
     protected $value = self::CONNECTION_KEEP_ALIVE;
 
     /**
-     * @param $headerLine
-     * @return Connection
+     * @param string $headerLine
+     * @return static
      * @throws Exception\InvalidArgumentException
      */
     public static function fromString($headerLine)
@@ -51,7 +49,7 @@ class Connection implements HeaderInterface
      * Set Connection header to define persistent connection
      *
      * @param  bool $flag
-     * @return Connection
+     * @return $this
      */
     public function setPersistent($flag)
     {
@@ -76,7 +74,7 @@ class Connection implements HeaderInterface
      * RFC allows any token as value, 'close' and 'keep-alive' are commonly used
      *
      * @param string $value
-     * @return Connection
+     * @return $this
      */
     public function setValue($value)
     {

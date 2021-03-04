@@ -1,16 +1,20 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\Backup;
 
+use Magento\Framework\Exception\LocalizedException;
+use Magento\Framework\Phrase;
+
 /**
  * Class to work with archives
  *
- * @author      Magento Core Team <core@magentocommerce.com>
+ * @api
+ * @since 100.0.2
  */
-abstract class AbstractBackup implements BackupInterface
+abstract class AbstractBackup implements BackupInterface, SourceFileInterface
 {
     /**
      * Backup name
@@ -67,6 +71,13 @@ abstract class AbstractBackup implements BackupInterface
      * @var string
      */
     protected $_lastErrorMessage;
+
+    /**
+     * Keep Source files in Backup
+     *
+     * @var boolean
+     */
+    private $keepSourceFile;
 
     /**
      * Set Backup Extension
@@ -138,14 +149,14 @@ abstract class AbstractBackup implements BackupInterface
      * Set root directory of Magento installation
      *
      * @param string $rootDir
-     * @throws \Magento\Framework\Exception\LocalizedException
+     * @throws LocalizedException
      * @return $this
      */
     public function setRootDir($rootDir)
     {
         if (!is_dir($rootDir)) {
-            throw new \Magento\Framework\Exception\LocalizedException(
-                new \Magento\Framework\Phrase('Bad root directory')
+            throw new LocalizedException(
+                new Phrase('Bad root directory')
             );
         }
 
@@ -295,5 +306,29 @@ abstract class AbstractBackup implements BackupInterface
         $name = str_replace(' ', '_', $name);
 
         return $name;
+    }
+
+    /**
+     * Check if keep files of backup
+     *
+     * @return bool
+     * @since 102.0.0
+     */
+    public function keepSourceFile()
+    {
+        return $this->keepSourceFile;
+    }
+
+    /**
+     * Set if keep files of backup
+     *
+     * @param bool $keepSourceFile
+     * @return $this
+     * @since 102.0.0
+     */
+    public function setKeepSourceFile(bool $keepSourceFile)
+    {
+        $this->keepSourceFile = $keepSourceFile;
+        return $this;
     }
 }

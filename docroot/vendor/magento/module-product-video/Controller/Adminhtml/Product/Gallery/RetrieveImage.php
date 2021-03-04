@@ -1,20 +1,28 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+
 namespace Magento\ProductVideo\Controller\Adminhtml\Product\Gallery;
 
+use Magento\Framework\App\Action\HttpPostActionInterface as HttpPostActionInterface;
 use Magento\Framework\App\Filesystem\DirectoryList;
+use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\File\Uploader;
-use \Magento\Framework\Validator\AllowedProtocols;
-use \Magento\Framework\Exception\LocalizedException;
 
 /**
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  */
-class RetrieveImage extends \Magento\Backend\App\Action
+class RetrieveImage extends \Magento\Backend\App\Action implements HttpPostActionInterface
 {
+    /**
+     * Authorization level of a basic admin session
+     *
+     * @see _isAllowed()
+     */
+    const ADMIN_RESOURCE = 'Magento_Catalog::products';
+
     /**
      * @var \Magento\Framework\Controller\Result\RawFactory
      */
@@ -48,9 +56,14 @@ class RetrieveImage extends \Magento\Backend\App\Action
     /**
      * URI validator
      *
-     * @var AllowedProtocols
+     * @var \Magento\Framework\Validator\ValidatorInterface
      */
-    private $validator;
+    private $protocolValidator;
+
+    /**
+     * @var \Magento\MediaStorage\Model\File\Validator\NotProtectedExtension
+     */
+    private $extensionValidator;
 
     /**
      * @param \Magento\Backend\App\Action\Context $context
@@ -60,6 +73,8 @@ class RetrieveImage extends \Magento\Backend\App\Action
      * @param \Magento\Framework\Image\AdapterFactory $imageAdapterFactory
      * @param \Magento\Framework\HTTP\Adapter\Curl $curl
      * @param \Magento\MediaStorage\Model\ResourceModel\File\Storage\File $fileUtility
+     * @param \Magento\Framework\Validator\ValidatorInterface $protocolValidator
+     * @param \Magento\MediaStorage\Model\File\Validator\NotProtectedExtension $extensionValidator
      */
     public function __construct(
         \Magento\Backend\App\Action\Context $context,
@@ -68,7 +83,9 @@ class RetrieveImage extends \Magento\Backend\App\Action
         \Magento\Framework\Filesystem $fileSystem,
         \Magento\Framework\Image\AdapterFactory $imageAdapterFactory,
         \Magento\Framework\HTTP\Adapter\Curl $curl,
-        \Magento\MediaStorage\Model\ResourceModel\File\Storage\File $fileUtility
+        \Magento\MediaStorage\Model\ResourceModel\File\Storage\File $fileUtility,
+        \Magento\Framework\Validator\ValidatorInterface $protocolValidator = null,
+        \Magento\MediaStorage\Model\File\Validator\NotProtectedExtension $extensionValidator = null
     ) {
         parent::__construct($context);
         $this->resultRawFactory = $resultRawFactory;
@@ -77,6 +94,12 @@ class RetrieveImage extends \Magento\Backend\App\Action
         $this->imageAdapter = $imageAdapterFactory->create();
         $this->curl = $curl;
         $this->fileUtility = $fileUtility;
+        $this->extensionValidator = $extensionValidator
+            ?: \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(\Magento\MediaStorage\Model\File\Validator\NotProtectedExtension::class);
+        $this->protocolValidator = $protocolValidator ?:
+            \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(\Magento\Framework\Validator\ValidatorInterface::class);
     }
 
     /**
@@ -88,17 +111,21 @@ class RetrieveImage extends \Magento\Backend\App\Action
         try {
             $remoteFileUrl = $this->getRequest()->getParam('remote_image');
             $this->validateRemoteFile($remoteFileUrl);
-            $originalFileName = basename($remoteFileUrl);
-            $localFileName = Uploader::getCorrectFileName($originalFileName);
-            $localTmpFileName = Uploader::getDispretionPath($localFileName) . DIRECTORY_SEPARATOR . $localFileName;
-            $localFileMediaPath = $baseTmpMediaPath . ($localTmpFileName);
-            $localUniqueFileMediaPath = $this->appendNewFileName($localFileMediaPath);
-            $this->retrieveRemoteImage($remoteFileUrl, $localUniqueFileMediaPath);
-            $localFileFullPath = $this->appendAbsoluteFileSystemPath($localUniqueFileMediaPath);
+            $localFileName = Uploader::getCorrectFileName(basename($remoteFileUrl));
+            $localTmpFileName = Uploader::getDispersionPath($localFileName) . DIRECTORY_SEPARATOR . $localFileName;
+            $localFilePath = $baseTmpMediaPath . ($localTmpFileName);
+            $localUniqFilePath = $this->appendNewFileName($localFilePath);
+            $this->validateRemoteFileExtensions($localUniqFilePath);
+            $this->retrieveRemoteImage($remoteFileUrl, $localUniqFilePath);
+            $localFileFullPath = $this->appendAbsoluteFileSystemPath($localUniqFilePath);
             $this->imageAdapter->validateUploadFile($localFileFullPath);
-            $result = $this->appendResultSaveRemoteImage($localUniqueFileMediaPath);
+            $result = $this->appendResultSaveRemoteImage($localUniqFilePath);
         } catch (\Exception $e) {
             $result = ['error' => $e->getMessage(), 'errorcode' => $e->getCode()];
+            $fileWriter = $this->fileSystem->getDirectoryWrite(DirectoryList::MEDIA);
+            if (isset($localFileFullPath) && $fileWriter->isExist($localFileFullPath)) {
+                $fileWriter->delete($localFileFullPath);
+            }
         }
 
         /** @var \Magento\Framework\Controller\Result\Raw $response */
@@ -106,20 +133,6 @@ class RetrieveImage extends \Magento\Backend\App\Action
         $response->setHeader('Content-type', 'text/plain');
         $response->setContents(json_encode($result));
         return $response;
-    }
-
-    /**
-     * Get URI validator
-     *
-     * @return AllowedProtocols
-     */
-    private function getValidator()
-    {
-        if ($this->validator === null) {
-            $this->validator = $this->_objectManager->get(AllowedProtocols::class);
-        }
-
-        return $this->validator;
     }
 
     /**
@@ -132,9 +145,7 @@ class RetrieveImage extends \Magento\Backend\App\Action
      */
     private function validateRemoteFile($remoteFileUrl)
     {
-        /** @var AllowedProtocols $validator */
-        $validator = $this->getValidator();
-        if (!$validator->isValid($remoteFileUrl)) {
+        if (!$this->protocolValidator->isValid($remoteFileUrl)) {
             throw new LocalizedException(
                 __("Protocol isn't allowed")
             );
@@ -144,13 +155,28 @@ class RetrieveImage extends \Magento\Backend\App\Action
     }
 
     /**
+     * Invalidates files that have script extensions.
+     *
+     * @param string $filePath
+     * @throws \Magento\Framework\Exception\ValidatorException
+     * @return void
+     */
+    private function validateRemoteFileExtensions($filePath)
+    {
+        $extension = pathinfo($filePath, PATHINFO_EXTENSION);
+        if (!$this->extensionValidator->isValid($extension)) {
+            throw new \Magento\Framework\Exception\ValidatorException(__('Disallowed file type.'));
+        }
+    }
+
+    /**
      * @param string $fileName
      * @return mixed
      */
     protected function appendResultSaveRemoteImage($fileName)
     {
         $fileInfo = pathinfo($fileName);
-        $tmpFileName = Uploader::getDispretionPath($fileInfo['basename']) . DIRECTORY_SEPARATOR . $fileInfo['basename'];
+        $tmpFileName = Uploader::getDispersionPath($fileInfo['basename']) . DIRECTORY_SEPARATOR . $fileInfo['basename'];
         $result['name'] = $fileInfo['basename'];
         $result['type'] = $this->imageAdapter->getMimeType();
         $result['error'] = 0;
@@ -161,6 +187,8 @@ class RetrieveImage extends \Magento\Backend\App\Action
     }
 
     /**
+     * Trying to get remote image to save it locally
+     *
      * @param string $fileUrl
      * @param string $localFilePath
      * @return void
@@ -172,8 +200,8 @@ class RetrieveImage extends \Magento\Backend\App\Action
         $this->curl->write('GET', $fileUrl);
         $image = $this->curl->read();
         if (empty($image)) {
-            throw new \Magento\Framework\Exception\LocalizedException(
-                __('Could not get preview image information. Please check your connection and try again.')
+            throw new LocalizedException(
+                __('The preview image information is unavailable. Check your connection and try again.')
             );
         }
         $this->fileUtility->saveFile($localFilePath, $image);

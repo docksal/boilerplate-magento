@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Catalog\Test\Unit\Ui\DataProvider\Product\Form\Modifier;
@@ -106,7 +106,9 @@ class AdvancedPricingTest extends AbstractModifierTest
      */
     protected function createModel()
     {
-        return $this->objectManager->getObject(AdvancedPricing::class, [
+        return $this->objectManager->getObject(
+            AdvancedPricing::class,
+            [
             'locator' => $this->locatorMock,
             'storeManager' => $this->storeManagerMock,
             'groupRepository' => $this->groupRepositoryMock,
@@ -114,7 +116,8 @@ class AdvancedPricingTest extends AbstractModifierTest
             'searchCriteriaBuilder' => $this->searchCriteriaBuilderMock,
             'moduleManager' => $this->moduleManagerMock,
             'directoryHelper' => $this->directoryHelperMock
-        ]);
+            ]
+        );
     }
 
     public function testModifyMeta()

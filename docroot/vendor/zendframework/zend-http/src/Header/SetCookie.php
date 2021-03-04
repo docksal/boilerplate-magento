@@ -1,10 +1,8 @@
 <?php
 /**
- * Zend Framework (http://framework.zend.com/)
- *
- * @link      http://github.com/zendframework/zf2 for the canonical source repository
- * @copyright Copyright (c) 2005-2015 Zend Technologies USA Inc. (http://www.zend.com)
- * @license   http://framework.zend.com/license/new-bsd New BSD License
+ * @see       https://github.com/zendframework/zend-http for the canonical source repository
+ * @copyright Copyright (c) 2005-2019 Zend Technologies USA Inc. (https://www.zend.com)
+ * @license   https://github.com/zendframework/zend-http/blob/master/LICENSE.md New BSD License
  */
 
 namespace Zend\Http\Header;
@@ -20,60 +18,87 @@ use Zend\Uri\UriFactory;
 class SetCookie implements MultipleHeaderInterface
 {
     /**
+     * Cookie will not be sent for any cross-domain requests whatsoever.
+     * Even if the user simply navigates to the target site with a regular link, the cookie will not be sent.
+     */
+    const SAME_SITE_STRICT = 'Strict';
+
+    /**
+     * Cookie will not be passed for any cross-domain requests unless it's a regular link that navigates user
+     * to the target site.
+     * Other requests methods (such as POST and PUT) and XHR requests will not contain this cookie.
+     */
+    const SAME_SITE_LAX = 'Lax';
+
+    /**
+     * Cookie will be sent with same-site and cross-site requests.
+     */
+    const SAME_SITE_NONE = 'None';
+
+    /**
+     * @internal
+     */
+    const SAME_SITE_ALLOWED_VALUES = [
+        self::SAME_SITE_STRICT,
+        self::SAME_SITE_LAX,
+        self::SAME_SITE_NONE,
+    ];
+
+    /**
      * Cookie name
      *
      * @var string|null
      */
-    protected $name = null;
+    protected $name;
 
     /**
      * Cookie value
      *
      * @var string|null
      */
-    protected $value = null;
+    protected $value;
 
     /**
      * Version
      *
      * @var int|null
      */
-    protected $version = null;
+    protected $version;
 
     /**
      * Max Age
      *
      * @var int|null
      */
-    protected $maxAge = null;
+    protected $maxAge;
 
     /**
      * Cookie expiry date
      *
      * @var int|null
      */
-    protected $expires = null;
+    protected $expires;
 
     /**
      * Cookie domain
      *
      * @var string|null
      */
-    protected $domain = null;
+    protected $domain;
 
     /**
      * Cookie path
      *
      * @var string|null
      */
-    protected $path = null;
+    protected $path;
 
     /**
      * Whether the cookie is secure or not
      *
      * @var bool|null
      */
-    protected $secure = null;
+    protected $secure;
 
     /**
      * If the value need to be quoted or not
@@ -85,7 +110,17 @@ class SetCookie implements MultipleHeaderInterface
     /**
      * @var bool|null
      */
-    protected $httponly = null;
+    protected $httponly;
+
+    /**
+     * @var string|null
+     */
+    protected $sameSite;
+
+    /**
+     * @var bool
+     */
+    protected $encodeValue = true;
 
     /**
      * @static
@@ -101,13 +136,14 @@ class SetCookie implements MultipleHeaderInterface
         if ($setCookieProcessor === null) {
             $setCookieClass = get_called_class();
             $setCookieProcessor = function ($headerLine) use ($setCookieClass) {
-                $header = new $setCookieClass;
+                /** @var SetCookie $header */
+                $header = new $setCookieClass();
                 $keyValuePairs = preg_split('#;\s*#', $headerLine);
 
                 foreach ($keyValuePairs as $keyValue) {
                     if (preg_match('#^(?P<headerKey>[^=]+)=\s*("?)(?P<headerValue>[^"]*)\2#', $keyValue, $matches)) {
                         $headerKey  = $matches['headerKey'];
-                        $headerValue= $matches['headerValue'];
+                        $headerValue = $matches['headerValue'];
                     } else {
                         $headerKey = $keyValue;
                         $headerValue = null;
@@ -117,11 +153,16 @@ class SetCookie implements MultipleHeaderInterface
                     if ($header->getName() === null) {
                         $header->setName($headerKey);
                         $header->setValue(urldecode($headerValue));
+
+                        // set no encode value if raw and encoded values are the same
+                        if (urldecode($headerValue) === $headerValue) {
+                            $header->setEncodeValue(false);
+                        }
                         continue;
                     }
 
                     // Process the remaining elements
-                    switch (str_replace(array('-', '_'), '', strtolower($headerKey))) {
+                    switch (str_replace(['-', '_'], '', strtolower($headerKey))) {
                         case 'expires':
                             $header->setExpires($headerValue);
                             break;
@@ -141,7 +182,10 @@ class SetCookie implements MultipleHeaderInterface
                             $header->setVersion((int) $headerValue);
                             break;
                         case 'maxage':
-                            $header->setMaxAge((int) $headerValue);
+                            $header->setMaxAge($headerValue);
+                            break;
+                        case 'samesite':
+                            $header->setSameSite($headerValue);
                             break;
                         default:
                             // Intentionally omitted
@@ -156,7 +200,7 @@ class SetCookie implements MultipleHeaderInterface
         HeaderValue::assertValid($value);
 
         // some sites return set-cookie::value, this is to get rid of the second :
-        $name = (strtolower($name) =='set-cookie:') ? 'set-cookie' : $name;
+        $name = strtolower($name) == 'set-cookie:' ? 'set-cookie' : $name;
 
         // check to ensure proper header type for this factory
         if (strtolower($name) !== 'set-cookie') {
@@ -168,7 +212,7 @@ class SetCookie implements MultipleHeaderInterface
         if (count($multipleHeaders) <= 1) {
             return $setCookieProcessor(array_pop($multipleHeaders));
         } else {
-            $headers = array();
+            $headers = [];
             foreach ($multipleHeaders as $headerLine) {
                 $headers[] = $setCookieProcessor($headerLine);
             }
@@ -181,15 +225,16 @@ class SetCookie implements MultipleHeaderInterface
      *
      * @todo Add validation of each one of the parameters (legal domain, etc.)
      *
-     * @param   string              $name
-     * @param   string              $value
-     * @param   int|string|DateTime $expires
-     * @param   string              $path
-     * @param   string              $domain
-     * @param   bool                $secure
-     * @param   bool                $httponly
-     * @param   string              $maxAge
-     * @param   int                 $version
+     * @param string|null              $name
+     * @param string|null              $value
+     * @param int|string|DateTime|null $expires
+     * @param string|null              $path
+     * @param string|null              $domain
+     * @param bool                     $secure
+     * @param bool                     $httponly
+     * @param int|null                 $maxAge
+     * @param int|null                 $version
+     * @param string|null              $sameSite
      */
     public function __construct(
         $name = null,
@@ -200,7 +245,8 @@ class SetCookie implements MultipleHeaderInterface
         $secure = false,
         $httponly = false,
         $maxAge = null,
-        $version = null
+        $version = null,
+        $sameSite = null
     ) {
         $this->type = 'Cookie';
 
@@ -212,7 +258,24 @@ class SetCookie implements MultipleHeaderInterface
              ->setExpires($expires)
              ->setPath($path)
              ->setSecure($secure)
-             ->setHttpOnly($httponly);
+             ->setHttpOnly($httponly)
+             ->setSameSite($sameSite);
+    }
+
+    /**
+     * @return bool
+     */
+    public function getEncodeValue()
+    {
+        return $this->encodeValue;
+    }
+
+    /**
+     * @param bool $encodeValue
+     */
+    public function setEncodeValue($encodeValue)
+    {
+        $this->encodeValue = (bool) $encodeValue;
     }
 
     /**
@@ -233,9 +296,9 @@ class SetCookie implements MultipleHeaderInterface
             return '';
         }
 
-        $value = urlencode($this->getValue());
+        $value = $this->encodeValue ? urlencode($this->getValue()) : $this->getValue();
         if ($this->hasQuoteFieldValue()) {
-            $value = '"'. $value . '"';
+            $value = '"' . $value . '"';
         }
 
         $fieldValue = $this->getName() . '=' . $value;
@@ -246,7 +309,7 @@ class SetCookie implements MultipleHeaderInterface
         }
 
         $maxAge = $this->getMaxAge();
-        if ($maxAge!==null) {
+        if ($maxAge !== null) {
             $fieldValue .= '; Max-Age=' . $maxAge;
         }
 
@@ -273,13 +336,18 @@ class SetCookie implements MultipleHeaderInterface
             $fieldValue .= '; HttpOnly';
         }
 
+        $sameSite = $this->getSameSite();
+        if ($sameSite !== null && in_array($sameSite, self::SAME_SITE_ALLOWED_VALUES, true)) {
+            $fieldValue .= '; SameSite=' . $sameSite;
+        }
+
         return $fieldValue;
     }
 
     /**
-     * @param string $name
+     * @param  string|null $name
+     * @return $this
      * @throws Exception\InvalidArgumentException
-     * @return SetCookie
      */
     public function setName($name)
     {
@@ -289,7 +357,7 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @return string
+     * @return string|null
      */
     public function getName()
     {
@@ -297,8 +365,8 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @param string $value
-     * @return SetCookie
+     * @param  string|null $value
+     * @return $this
      */
     public function setValue($value)
     {
@@ -307,7 +375,7 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @return string
+     * @return string|null
      */
     public function getValue()
     {
@@ -315,15 +383,13 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * Set version
-     *
-     * @param int $version
+     * @param  int|null $version
+     * @return $this
      * @throws Exception\InvalidArgumentException
-     * @return SetCookie
      */
     public function setVersion($version)
     {
-        if ($version !== null && !is_int($version)) {
+        if ($version !== null && ! is_int($version)) {
             throw new Exception\InvalidArgumentException('Invalid Version number specified');
         }
         $this->version = $version;
@@ -331,9 +397,7 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * Get version
-     *
-     * @return int
+     * @return int|null
      */
     public function getVersion()
     {
@@ -341,25 +405,21 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * Set Max-Age
-     *
-     * @param int $maxAge
-     * @throws Exception\InvalidArgumentException
-     * @return SetCookie
+     * @param  int $maxAge
+     * @return $this
      */
     public function setMaxAge($maxAge)
     {
-        if ($maxAge !== null && (!is_int($maxAge) || ($maxAge < 0))) {
-            throw new Exception\InvalidArgumentException('Invalid Max-Age number specified');
+        if ($maxAge === null || ! is_numeric($maxAge)) {
+            return $this;
         }
-        $this->maxAge = $maxAge;
+
+        $this->maxAge = max(0, (int) $maxAge);
         return $this;
     }
 
     /**
-     * Get Max-Age
-     *
-     * @return int
+     * @return int|null
      */
     public function getMaxAge()
     {
@@ -367,12 +427,8 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * Set Expires
-     *
-     * @param int|string|DateTime $expires
-     *
-     * @return self
-     *
+     * @param  int|string|DateTime|null $expires
+     * @return $this
      * @throws Exception\InvalidArgumentException
      */
     public function setExpires($expires)
@@ -392,7 +448,7 @@ class SetCookie implements MultipleHeaderInterface
             $tsExpires = strtotime($expires);
 
             // if $tsExpires is invalid and PHP is compiled as 32bit. Check if it fail reason is the 2038 bug
-            if (!is_int($tsExpires) && PHP_INT_SIZE === 4) {
+            if (! is_int($tsExpires) && PHP_INT_SIZE === 4) {
                 $dateTime = new DateTime($expires);
                 if ($dateTime->format('Y') > 2038) {
                     $tsExpires = PHP_INT_MAX;
@@ -400,7 +456,7 @@ class SetCookie implements MultipleHeaderInterface
             }
         }
 
-        if (!is_int($tsExpires) || $tsExpires < 0) {
+        if (! is_int($tsExpires) || $tsExpires < 0) {
             throw new Exception\InvalidArgumentException('Invalid expires time specified');
         }
 
@@ -410,13 +466,13 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @param bool $inSeconds
-     * @return int|string
+     * @param  bool $inSeconds
+     * @return int|string|null
      */
     public function getExpires($inSeconds = false)
     {
         if ($this->expires === null) {
-            return;
+            return null;
         }
         if ($inSeconds) {
             return $this->expires;
@@ -425,8 +481,8 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @param string $domain
-     * @return SetCookie
+     * @param  string|null $domain
+     * @return $this
      */
     public function setDomain($domain)
     {
@@ -436,7 +492,7 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @return string
+     * @return string|null
      */
     public function getDomain()
     {
@@ -444,8 +500,8 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @param string $path
-     * @return SetCookie
+     * @param  string|null $path
+     * @return $this
      */
     public function setPath($path)
     {
@@ -455,7 +511,7 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @return string
+     * @return string|null
      */
     public function getPath()
     {
@@ -463,8 +519,8 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @param  bool $secure
-     * @return SetCookie
+     * @param  bool|null $secure
+     * @return $this
      */
     public function setSecure($secure)
     {
@@ -479,7 +535,7 @@ class SetCookie implements MultipleHeaderInterface
      * Set whether the value for this cookie should be quoted
      *
      * @param  bool $quotedValue
-     * @return SetCookie
+     * @return $this
      */
     public function setQuoteFieldValue($quotedValue)
     {
@@ -488,7 +544,7 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @return bool
+     * @return bool|null
      */
     public function isSecure()
     {
@@ -496,8 +552,8 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @param  bool $httponly
-     * @return SetCookie
+     * @param  bool|null $httponly
+     * @return $this
      */
     public function setHttponly($httponly)
     {
@@ -509,7 +565,7 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
-     * @return bool
+     * @return bool|null
      */
     public function isHttponly()
     {
@@ -521,7 +577,7 @@ class SetCookie implements MultipleHeaderInterface
      *
      * Always returns false if the cookie is a session cookie (has no expiry time)
      *
-     * @param int $now Timestamp to consider as "now"
+     * @param int|null $now Timestamp to consider as "now"
      * @return bool
      */
     public function isExpired($now = null)
@@ -548,6 +604,31 @@ class SetCookie implements MultipleHeaderInterface
     }
 
     /**
+     * @return string|null
+     */
+    public function getSameSite()
+    {
+        return $this->sameSite;
+    }
+
+    /**
+     * @param  string|null $sameSite
+     * @return $this
+     * @throws Exception\InvalidArgumentException
+     */
+    public function setSameSite($sameSite)
+    {
+        if ($sameSite !== null && ! in_array($sameSite, self::SAME_SITE_ALLOWED_VALUES, true)) {
+            throw new Exception\InvalidArgumentException(sprintf(
+                'Invalid value provided for SameSite directive: "%s"; expected one of: Strict, Lax or None',
+                is_scalar($sameSite) ? $sameSite : gettype($sameSite)
+            ));
+        }
+        $this->sameSite = $sameSite;
+        return $this;
+    }
+
+    /**
      * Check whether the value for this cookie should be quoted
      *
      * @return bool
@@ -557,6 +638,12 @@ class SetCookie implements MultipleHeaderInterface
         return $this->quoteFieldValue;
     }
 
+    /**
+     * @param  string $requestDomain
+     * @param  string $path
+     * @param  bool   $isSecure
+     * @return bool
+     */
     public function isValidForRequest($requestDomain, $path, $isSecure = false)
     {
         if ($this->getDomain() && (strrpos($requestDomain, $this->getDomain()) === false)) {
@@ -567,7 +654,7 @@ class SetCookie implements MultipleHeaderInterface
             return false;
         }
 
-        if ($this->secure && $this->isSecure()!==$isSecure) {
+        if ($this->secure && $this->isSecure() !== $isSecure) {
             return false;
         }
 
@@ -579,7 +666,7 @@ class SetCookie implements MultipleHeaderInterface
      *
      * @param string|\Zend\Uri\Uri $uri URI to check against (secure, domain, path)
      * @param bool $matchSessionCookies Whether to send session cookies
-     * @param int $now Override the current time when checking for expiry time
+     * @param int|null $now Override the current time when checking for expiry time
      * @return bool
      * @throws Exception\InvalidArgumentException If URI does not have HTTP or HTTPS scheme.
      */
@@ -590,7 +677,7 @@ class SetCookie implements MultipleHeaderInterface
         }
 
         // Make sure we have a valid Zend_Uri_Http object
-        if (! ($uri->isValid() && ($uri->getScheme() == 'http' || $uri->getScheme() =='https'))) {
+        if (! ($uri->isValid() && ($uri->getScheme() == 'http' || $uri->getScheme() == 'https'))) {
             throw new Exception\InvalidArgumentException('Passed URI is not a valid HTTP or HTTPS URI');
         }
 
@@ -626,7 +713,6 @@ class SetCookie implements MultipleHeaderInterface
      *
      * @param  string $cookieDomain
      * @param  string $host
-     *
      * @return bool
      */
     public static function matchCookieDomain($cookieDomain, $host)
@@ -634,8 +720,8 @@ class SetCookie implements MultipleHeaderInterface
         $cookieDomain = strtolower($cookieDomain);
         $host = strtolower($host);
         // Check for either exact match or suffix match
-        return ($cookieDomain == $host ||
-                preg_match('/' . preg_quote($cookieDomain) . '$/', $host));
+        return $cookieDomain == $host
+            || preg_match('/' . preg_quote($cookieDomain) . '$/', $host);
     }
 
     /**
@@ -652,17 +738,25 @@ class SetCookie implements MultipleHeaderInterface
         return (strpos($path, $cookiePath) === 0);
     }
 
+    /**
+     * @return string
+     */
     public function toString()
     {
         return 'Set-Cookie: ' . $this->getFieldValue();
     }
 
+    /**
+     * @param  array $headers
+     * @return string
+     * @throws Exception\RuntimeException
+     */
     public function toStringMultipleHeaders(array $headers)
     {
         $headerLine = $this->toString();
         /* @var $header SetCookie */
         foreach ($headers as $header) {
-            if (!$header instanceof SetCookie) {
+            if (! $header instanceof SetCookie) {
                 throw new Exception\RuntimeException(
                     'The SetCookie multiple header implementation can only accept an array of SetCookie headers'
                 );

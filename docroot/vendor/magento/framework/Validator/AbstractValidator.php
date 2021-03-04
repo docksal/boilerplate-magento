@@ -1,12 +1,16 @@
 <?php
 /**
- * Abstract validator class.
- *
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\Validator;
 
+/**
+ * Abstract validator class.
+ *
+ * @api
+ * @since 100.0.2
+ */
 abstract class AbstractValidator implements \Magento\Framework\Validator\ValidatorInterface
 {
     /**

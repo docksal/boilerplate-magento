@@ -1,6 +1,10 @@
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
+ */
+
+/**
+ * @api
  */
 define([
     'underscore',
@@ -11,7 +15,7 @@ define([
     'use strict';
 
     /**
-     * Removes non plain object items from the specfied array.
+     * Removes non plain object items from the specified array.
      *
      * @param {Array} container - Array whose value should be filtered.
      * @returns {Array}
@@ -306,7 +310,7 @@ define([
          * @private
          *
          * @param {Array} args - An array of arguments to pass to the next delegation call.
-         * @returns {Array} An array of delegation resutls.
+         * @returns {Array} An array of delegation results.
          */
         _delegate: function (args) {
             var result;

@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -10,6 +10,8 @@ namespace Magento\Framework\Notification;
  * Class for processing the list of system messages
  *
  * Class MessageList
+ * @api
+ * @since 100.0.2
  */
 class MessageList
 {
@@ -71,7 +73,7 @@ class MessageList
     public function getMessageByIdentity($identity)
     {
         $this->_loadMessages();
-        return isset($this->_messages[$identity]) ? $this->_messages[$identity] : null;
+        return $this->_messages[$identity] ?? null;
     }
 
     /**

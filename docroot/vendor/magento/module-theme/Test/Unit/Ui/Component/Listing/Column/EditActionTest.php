@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Theme\Test\Unit\Ui\Component\Listing\Column;
@@ -9,7 +9,10 @@ use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Store\Model\ScopeInterface;
 use Magento\Theme\Ui\Component\Listing\Column\EditAction;
 
-class EditActionTest extends \PHPUnit_Framework_TestCase
+/**
+ * Class EditActionTest
+ */
+class EditActionTest extends \PHPUnit\Framework\TestCase
 {
     /** @var EditAction */
     protected $component;
@@ -25,21 +28,15 @@ class EditActionTest extends \PHPUnit_Framework_TestCase
 
     public function setup()
     {
-        $this->context = $this->getMockBuilder('Magento\Framework\View\Element\UiComponent\ContextInterface')
+        $this->context = $this->getMockBuilder(\Magento\Framework\View\Element\UiComponent\ContextInterface::class)
             ->getMockForAbstractClass();
-        $processor = $this->getMockBuilder('Magento\Framework\View\Element\UiComponent\Processor')
+        $processor = $this->getMockBuilder(\Magento\Framework\View\Element\UiComponent\Processor::class)
             ->disableOriginalConstructor()
             ->getMock();
-        $this->context->expects($this->any())->method('getProcessor')->willReturn($processor);
-        $this->uiComponentFactory = $this->getMock(
-            'Magento\Framework\View\Element\UiComponentFactory',
-            [],
-            [],
-            '',
-            false
-        );
+        $this->context->expects($this->never())->method('getProcessor')->willReturn($processor);
+        $this->uiComponentFactory = $this->createMock(\Magento\Framework\View\Element\UiComponentFactory::class);
         $this->urlBuilder = $this->getMockForAbstractClass(
-            'Magento\Framework\UrlInterface',
+            \Magento\Framework\UrlInterface::class,
             [],
             '',
             false
@@ -70,6 +67,7 @@ class EditActionTest extends \PHPUnit_Framework_TestCase
                 'edit' => [
                     'href' => 'http://magento.com/theme/design_config/edit',
                     'label' => new \Magento\Framework\Phrase('Edit'),
+                    '__disableTmpl' => true,
                 ]
             ],
         ];
@@ -88,6 +86,9 @@ class EditActionTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals($expectedDataSource, $dataSource);
     }
 
+    /**
+     * @return array
+     */
     public function getPrepareDataSourceDataProvider()
     {
         return [

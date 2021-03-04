@@ -1,10 +1,8 @@
 <?php
 /**
- * Zend Framework (http://framework.zend.com/)
- *
- * @link      http://github.com/zendframework/zf2 for the canonical source repository
- * @copyright Copyright (c) 2005-2015 Zend Technologies USA Inc. (http://www.zend.com)
- * @license   http://framework.zend.com/license/new-bsd New BSD License
+ * @see       https://github.com/zendframework/zend-http for the canonical source repository
+ * @copyright Copyright (c) 2005-2017 Zend Technologies USA Inc. (http://www.zend.com)
+ * @license   https://github.com/zendframework/zend-http/blob/master/LICENSE.md New BSD License
  */
 
 namespace Zend\Http\Header;
@@ -41,7 +39,7 @@ abstract class AbstractDate implements HeaderInterface
      *
      * @var DateTime
      */
-    protected $date = null;
+    protected $date;
 
     /**
      * Date output format
@@ -57,17 +55,17 @@ abstract class AbstractDate implements HeaderInterface
      *
      * @var array
      */
-    protected static $dateFormats = array(
+    protected static $dateFormats = [
         self::DATE_RFC1123 => 'D, d M Y H:i:s \G\M\T',
         self::DATE_RFC1036 => 'D, d M y H:i:s \G\M\T',
         self::DATE_ANSIC   => 'D M j H:i:s Y',
-    );
+    ];
 
     /**
      * Create date-based header from string
      *
      * @param string $headerLine
-     * @return AbstractDate
+     * @return static
      * @throws Exception\InvalidArgumentException
      */
     public static function fromString($headerLine)
@@ -92,9 +90,7 @@ abstract class AbstractDate implements HeaderInterface
      * Create date-based header from strtotime()-compatible string
      *
      * @param int|string $time
-     *
-     * @return self
-     *
+     * @return static
      * @throws Exception\InvalidArgumentException
      */
     public static function fromTimeString($time)
@@ -106,9 +102,7 @@ abstract class AbstractDate implements HeaderInterface
      * Create date-based header from Unix timestamp
      *
      * @param int $time
-     *
-     * @return self
-     *
+     * @return static
      * @throws Exception\InvalidArgumentException
      */
     public static function fromTimestamp($time)
@@ -134,10 +128,11 @@ abstract class AbstractDate implements HeaderInterface
      */
     public static function setDateFormat($format)
     {
-        if (!isset(static::$dateFormats[$format])) {
-            throw new Exception\InvalidArgumentException(
-                "No constant defined for provided date format: {$format}"
-            );
+        if (! isset(static::$dateFormats[$format])) {
+            throw new Exception\InvalidArgumentException(sprintf(
+                'No constant defined for provided date format: %s',
+                $format
+            ));
         }
 
         static::$dateFormat = static::$dateFormats[$format];
@@ -157,7 +152,7 @@ abstract class AbstractDate implements HeaderInterface
      * Set the date for this header, this can be a string or an instance of \DateTime
      *
      * @param string|DateTime $date
-     * @return AbstractDate
+     * @return $this
      * @throws Exception\InvalidArgumentException
      */
     public function setDate($date)
@@ -172,7 +167,7 @@ abstract class AbstractDate implements HeaderInterface
                     $e
                 );
             }
-        } elseif (!($date instanceof DateTime)) {
+        } elseif (! ($date instanceof DateTime)) {
             throw new Exception\InvalidArgumentException('Date must be an instance of \DateTime or a string');
         }
 
@@ -226,7 +221,7 @@ abstract class AbstractDate implements HeaderInterface
                     $e
                 );
             }
-        } elseif (!($date instanceof DateTime)) {
+        } elseif (! ($date instanceof DateTime)) {
             throw new Exception\InvalidArgumentException('Date must be an instance of \DateTime or a string');
         }
 

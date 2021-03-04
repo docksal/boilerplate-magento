@@ -1,10 +1,8 @@
 <?php
 /**
- * Zend Framework (http://framework.zend.com/)
- *
- * @link      http://github.com/zendframework/zf2 for the canonical source repository
- * @copyright Copyright (c) 2005-2015 Zend Technologies USA Inc. (http://www.zend.com)
- * @license   http://framework.zend.com/license/new-bsd New BSD License
+ * @see       https://github.com/zendframework/zend-http for the canonical source repository
+ * @copyright Copyright (c) 2005-2017 Zend Technologies USA Inc. (http://www.zend.com)
+ * @license   https://github.com/zendframework/zend-http/blob/master/LICENSE.md New BSD License
  */
 
 namespace Zend\Http\Header;
@@ -27,7 +25,7 @@ class Age implements HeaderInterface
      * Create Age header from string
      *
      * @param string $headerLine
-     * @return Age
+     * @return static
      * @throws Exception\InvalidArgumentException
      */
     public static function fromString($headerLine)
@@ -39,14 +37,12 @@ class Age implements HeaderInterface
             throw new Exception\InvalidArgumentException('Invalid header line for Age string: "' . $name . '"');
         }
 
-        $header = new static($value);
-
-        return $header;
+        return new static($value);
     }
 
     public function __construct($deltaSeconds = null)
     {
-        if ($deltaSeconds) {
+        if ($deltaSeconds !== null) {
             $this->setDeltaSeconds($deltaSeconds);
         }
     }
@@ -64,18 +60,18 @@ class Age implements HeaderInterface
     /**
      * Get header value (number of seconds)
      *
-     * @return int
+     * @return string
      */
     public function getFieldValue()
     {
-        return $this->getDeltaSeconds();
+        return (string) $this->getDeltaSeconds();
     }
 
     /**
      * Set number of seconds
      *
      * @param int $delta
-     * @return RetryAfter
+     * @return $this
      */
     public function setDeltaSeconds($delta)
     {

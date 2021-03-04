@@ -107,197 +107,1442 @@ class TransactionTest extends Setup
         $this->assertEquals('47.00', $transaction->amount);
     }
 
-  public function testCreateTransactionUsingEuropeBankAccountNonce()
+  public function testSaleWithIdealPaymentId()
     {
-        $gateway = new Braintree\Gateway([
-            'environment' => 'development',
-            'merchantId' => 'altpay_merchant',
-            'publicKey' => 'altpay_merchant_public_key',
-            'privateKey' => 'altpay_merchant_private_key'
-        ]);
-
-        $result = $gateway->customer()->create();
-        $this->assertTrue($result->success);
-        $customer = $result->customer;
-        $clientApi = new HttpClientApi($gateway->config);
-        $nonce = $clientApi->nonceForNewEuropeanBankAccount([
-            "customerId" => $customer->id,
-            "sepa_mandate" => [
-                "locale" => "de-DE",
-                "bic" => "DEUTDEFF",
-                "iban" => "DE89370400440532013000",
-                "accountHolderName" => "Bob Holder",
-                "billingAddress" => [
-                    "streetAddress" => "123 Currywurst Way",
-                    "extendedAddress" => "Lager Suite",
-                    "firstName" => "Wilhelm",
-                    "lastName" => "Dix",
-                    "locality" => "Frankfurt",
-                    "postalCode" => "60001",
-                    "countryCodeAlpha2" => "DE",
-                    "region" => "Hesse"
-                ]
+        $result = Braintree\Transaction::sale([
+            'amount' => '100.00',
+            'merchantAccountId' => 'ideal_merchant_account',
+            'paymentMethodNonce' => Test\Helper::generateValidIdealPaymentId(),
+            'orderId' => 'ABC123',
+            'options' => [
+                'submitForSettlement' => true,
             ]
-        ]);
-
-        $result = $gateway->transaction()->sale([
-            'amount' => '47.00',
-            'merchantAccountId' => 'fake_sepa_ma',
-            'paymentMethodNonce' => $nonce
         ]);
 
         $this->assertTrue($result->success);
         $transaction = $result->transaction;
-        $this->assertEquals(Braintree\Transaction::AUTHORIZED, $transaction->status);
+        $this->assertEquals(Braintree\Transaction::SETTLED, $transaction->status);
         $this->assertEquals(Braintree\Transaction::SALE, $transaction->type);
-        $this->assertEquals('47.00', $transaction->amount);
-        $this->assertEquals('DEUTDEFF', $transaction->europeBankAccount->bic);
+        $this->assertEquals(Braintree\PaymentInstrumentType::IDEAL_PAYMENT, $transaction->paymentInstrumentType);
+        $this->assertEquals('100.00', $transaction->amount);
+        $this->assertRegExp('/^idealpayment_\w{6,}$/', $transaction->idealPayment->idealPaymentId);
+        $this->assertRegExp('/^\d{16,}$/', $transaction->idealPayment->idealTransactionId);
+        $this->assertRegExp('/^https:\/\//', $transaction->idealPayment->imageUrl);
+        $this->assertNotNull($transaction->idealPayment->maskedIban);
+        $this->assertNotNull($transaction->idealPayment->bic);
     }
 
-  public function testSettleAltPayTransaction()
-    {
-        $gateway = new Braintree\Gateway([
-            'environment' => 'development',
-            'merchantId' => 'altpay_merchant',
-            'publicKey' => 'altpay_merchant_public_key',
-            'privateKey' => 'altpay_merchant_private_key'
-        ]);
-
-        $result = $gateway->customer()->create();
-        $this->assertTrue($result->success);
-        $customer = $result->customer;
-        $clientApi = new HttpClientApi($gateway->config);
-        $nonce = $clientApi->nonceForNewEuropeanBankAccount([
-            "customerId" => $customer->id,
-            "sepa_mandate" => [
-                "locale" => "de-DE",
-                "bic" => "DEUTDEFF",
-                "iban" => "DE89370400440532013000",
-                "accountHolderName" => "Bob Holder",
-                "billingAddress" => [
-                    "streetAddress" => "123 Currywurst Way",
-                    "extendedAddress" => "Lager Suite",
-                    "firstName" => "Wilhelm",
-                    "lastName" => "Dix",
-                    "locality" => "Frankfurt",
-                    "postalCode" => "60001",
-                    "countryCodeAlpha2" => "DE",
-                    "region" => "Hesse"
-                ]
-            ]
-        ]);
-
+  public function testSaleAndSkipAdvancedFraudChecking()
+  {
+        $gateway = Test\Helper::advancedFraudIntegrationMerchantGateway();
         $result = $gateway->transaction()->sale([
-            'amount' => '47.00',
-            'merchantAccountId' => 'fake_sepa_ma',
-            'paymentMethodNonce' => $nonce,
-            'options' => [
-                'submitForSettlement' => true
-            ]
-        ]);
+          'amount' => Braintree\Test\TransactionAmounts::$authorize,
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'options' => [
+              'skipAdvancedFraudChecking' => true
+          ]
+      ]);
+      $this->assertTrue($result->success);
+      $transaction = $result->transaction;
+      $this->assertFalse(property_exists($transaction, "riskData"));
+  }
 
-        $transaction = $result->transaction;
-        $gateway->testing()->settle($transaction->id);
-        $transaction = $gateway->transaction()->find($transaction->id);
-        $this->assertSame(Braintree\Transaction::SETTLED, $transaction->status);
-    }
+  public function testSaleAndSkipAvs()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => Braintree\Test\TransactionAmounts::$authorize,
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2019',
+          ],
+          'options' => [
+              'skipAvs' => true
+          ]
+      ]);
+      $this->assertTrue($result->success);
+      $transaction = $result->transaction;
+      $this->assertNull($transaction->avsErrorResponseCode);
+      $this->assertEquals($transaction->avsStreetAddressResponseCode, 'B');
+  }
 
-  public function testSettlementConfirmAltPayTransaction()
-    {
-        $gateway = new Braintree\Gateway([
-            'environment' => 'development',
-            'merchantId' => 'altpay_merchant',
-            'publicKey' => 'altpay_merchant_public_key',
-            'privateKey' => 'altpay_merchant_private_key'
-        ]);
+  public function testSaleAndSkipCvv()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => Braintree\Test\TransactionAmounts::$authorize,
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2019',
+          ],
+          'options' => [
+              'skipCvv' => true
+          ]
+      ]);
+      $this->assertTrue($result->success);
+      $transaction = $result->transaction;
+      $this->assertEquals($transaction->cvvResponseCode, 'B');
+  }
 
-        $result = $gateway->customer()->create();
-        $this->assertTrue($result->success);
-        $customer = $result->customer;
-        $clientApi = new HttpClientApi($gateway->config);
-        $nonce = $clientApi->nonceForNewEuropeanBankAccount([
-            "customerId" => $customer->id,
-            "sepa_mandate" => [
-                "locale" => "de-DE",
-                "bic" => "DEUTDEFF",
-                "iban" => "DE89370400440532013000",
-                "accountHolderName" => "Bob Holder",
-                "billingAddress" => [
-                    "streetAddress" => "123 Currywurst Way",
-                    "extendedAddress" => "Lager Suite",
-                    "firstName" => "Wilhelm",
-                    "lastName" => "Dix",
-                    "locality" => "Frankfurt",
-                    "postalCode" => "60001",
-                    "countryCodeAlpha2" => "DE",
-                    "region" => "Hesse"
-                ]
-            ]
-        ]);
+  public function testSaleWithLevel3SummaryFields()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'shippingAmount' => '1.00',
+          'discountAmount' => '2.00',
+          'shipsFromPostalCode' => '12345',
+      ]);
 
-        $result = $gateway->transaction()->sale([
-            'amount' => '47.00',
-            'merchantAccountId' => 'fake_sepa_ma',
-            'paymentMethodNonce' => $nonce,
-            'options' => [
-                'submitForSettlement' => true
-            ]
-        ]);
+      $this->assertTrue($result->success);
+      $transaction = $result->transaction;
+      $this->assertEquals('1.00', $transaction->shippingAmount);
+      $this->assertEquals('2.00', $transaction->discountAmount);
+      $this->assertEquals('12345', $transaction->shipsFromPostalCode);
+  }
 
-        $transaction = $result->transaction;
-        $gateway->testing()->settlementConfirm($transaction->id);
-        $transaction = $gateway->transaction()->find($transaction->id);
-        $this->assertSame(Braintree\Transaction::SETTLEMENT_CONFIRMED, $transaction->status);
-    }
+  public function testSaleWhenDiscountAmountFormatIsInvalid()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'discountAmount' => '123.456',
+      ]);
 
-  public function testSettlementDeclineAltPayTransaction()
-    {
-        $gateway = new Braintree\Gateway([
-            'environment' => 'development',
-            'merchantId' => 'altpay_merchant',
-            'publicKey' => 'altpay_merchant_public_key',
-            'privateKey' => 'altpay_merchant_private_key'
-        ]);
+      $this->assertFalse($result->success);
+      $baseErrors = $result->errors->forKey('transaction')->onAttribute('discountAmount');
+      $this->assertEquals(Braintree\Error\Codes::TRANSACTION_DISCOUNT_AMOUNT_FORMAT_IS_INVALID, $baseErrors[0]->code);
+  }
 
-        $result = $gateway->customer()->create();
-        $this->assertTrue($result->success);
-        $customer = $result->customer;
-        $clientApi = new HttpClientApi($gateway->config);
-        $nonce = $clientApi->nonceForNewEuropeanBankAccount([
-            "customerId" => $customer->id,
-            "sepa_mandate" => [
-                "locale" => "de-DE",
-                "bic" => "DEUTDEFF",
-                "iban" => "DE89370400440532013000",
-                "accountHolderName" => "Bob Holder",
-                "billingAddress" => [
-                    "streetAddress" => "123 Currywurst Way",
-                    "extendedAddress" => "Lager Suite",
-                    "firstName" => "Wilhelm",
-                    "lastName" => "Dix",
-                    "locality" => "Frankfurt",
-                    "postalCode" => "60001",
-                    "countryCodeAlpha2" => "DE",
-                    "region" => "Hesse"
-                ]
-            ]
-        ]);
+  public function testSaleWhenDiscountAmountCannotBeNegative()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'discountAmount' => '-2.00',
+      ]);
 
-        $result = $gateway->transaction()->sale([
-            'amount' => '47.00',
-            'merchantAccountId' => 'fake_sepa_ma',
-            'paymentMethodNonce' => $nonce,
-            'options' => [
-                'submitForSettlement' => true
-            ]
-        ]);
+      $this->assertFalse($result->success);
+      $baseErrors = $result->errors->forKey('transaction')->onAttribute('discountAmount');
+      $this->assertEquals(Braintree\Error\Codes::TRANSACTION_DISCOUNT_AMOUNT_CANNOT_BE_NEGATIVE, $baseErrors[0]->code);
+  }
 
-        $transaction = $result->transaction;
-        $gateway->testing()->settlementConfirm($transaction->id);
-        $gateway->testing()->settlementDecline($transaction->id);
-        $transaction = $gateway->transaction()->find($transaction->id);
-        $this->assertSame(Braintree\Transaction::SETTLEMENT_DECLINED, $transaction->status);
-    }
+  public function testSaleWhenDiscountAmountIsTooLarge()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'discountAmount' => '2147483647',
+      ]);
+
+      $this->assertFalse($result->success);
+      $baseErrors = $result->errors->forKey('transaction')->onAttribute('discountAmount');
+      $this->assertEquals(Braintree\Error\Codes::TRANSACTION_DISCOUNT_AMOUNT_IS_TOO_LARGE, $baseErrors[0]->code);
+  }
+
+  public function testSaleWhenShippingAmountFormatIsInvalid()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'shippingAmount' => '1a00',
+      ]);
+
+      $this->assertFalse($result->success);
+      $baseErrors = $result->errors->forKey('transaction')->onAttribute('shippingAmount');
+      $this->assertEquals(Braintree\Error\Codes::TRANSACTION_SHIPPING_AMOUNT_FORMAT_IS_INVALID, $baseErrors[0]->code);
+  }
+
+  public function testSaleWhenShippingAmountCannotBeNegative()
+  {
+    $result = Braintree\Transaction::sale([
+        'amount' => '35.05',
+        'creditCard' => [
+            'number' => Braintree\Test\CreditCardNumbers::$visa,
+            'expirationDate' => '05/2009',
+        ],
+        'shippingAmount' => '-1.00',
+    ]);
+
+    $this->assertFalse($result->success);
+    $baseErrors = $result->errors->forKey('transaction')->onAttribute('shippingAmount');
+    $this->assertEquals(Braintree\Error\Codes::TRANSACTION_SHIPPING_AMOUNT_CANNOT_BE_NEGATIVE, $baseErrors[0]->code);
+  }
+
+  public function testSaleWhenShippingAmountIsTooLarge()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'shippingAmount' => '2147483647',
+      ]);
+
+      $this->assertFalse($result->success);
+      $baseErrors = $result->errors->forKey('transaction')->onAttribute('shippingAmount');
+      $this->assertEquals(Braintree\Error\Codes::TRANSACTION_SHIPPING_AMOUNT_IS_TOO_LARGE, $baseErrors[0]->code);
+  }
+
+  public function testSaleWhenShipsFromPostalCodeIsTooLong()
+  {
+      $result = Braintree\Transaction::sale([
+        'amount' => '35.05',
+        'creditCard' => [
+            'number' => Braintree\Test\CreditCardNumbers::$visa,
+            'expirationDate' => '05/2009',
+        ],
+        'shipsFromPostalCode' => '12345678901',
+      ]);
+
+      $this->assertFalse($result->success);
+      $baseErrors = $result->errors->forKey('transaction')->onAttribute('shipsFromPostalCode');
+      $this->assertEquals(Braintree\Error\Codes::TRANSACTION_SHIPS_FROM_POSTAL_CODE_IS_TOO_LONG, $baseErrors[0]->code);
+  }
+
+  public function testSaleWhenShipsFromPostalCodeIsInvalid()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'shipsFromPostalCode' => [1, 2, 3],
+      ]);
+
+      $this->assertFalse($result->success);
+      $baseErrors = $result->errors->forKey('transaction')->onAttribute('shipsFromPostalCode');
+      $this->assertEquals(Braintree\Error\Codes::TRANSACTION_SHIPS_FROM_POSTAL_CODE_IS_INVALID, $baseErrors[0]->code);
+  }
+
+  public function testSaleWhenShipsFromPostalCodeInvalidCharacters()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'shipsFromPostalCode' => '1$345',
+      ]);
+
+      $this->assertFalse($result->success);
+      $baseErrors = $result->errors->forKey('transaction')->onAttribute('shipsFromPostalCode');
+      $this->assertEquals(Braintree\Error\Codes::TRANSACTION_SHIPS_FROM_POSTAL_CODE_INVALID_CHARACTERS, $baseErrors[0]->code);
+  }
+
+  public function testSale_withLineItemsZero()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '45.15',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ]
+      ]);
+
+      $this->assertTrue($result->success);
+      $transaction = $result->transaction;
+      $lineItems = $transaction->lineItems();
+      $this->assertEquals(0, sizeof($lineItems));
+  }
+
+  public function testSale_withLineItemsSingleOnlyRequiredFields()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [[
+              'quantity' => '1.0232',
+              'name' => 'Name #1',
+              'kind' => Braintree\TransactionLineItem::DEBIT,
+              'unitAmount' => '45.1232',
+              'totalAmount' => '45.15',
+          ]]
+      ]);
+
+      $this->assertTrue($result->success);
+      $transaction = $result->transaction;
+      $lineItems = $transaction->lineItems();
+      $this->assertEquals(1, sizeof($lineItems));
+
+      $lineItem = $lineItems[0];
+      $this->assertEquals('1.0232', $lineItem->quantity);
+      $this->assertEquals('Name #1', $lineItem->name);
+      $this->assertEquals(Braintree\TransactionLineItem::DEBIT, $lineItem->kind);
+      $this->assertEquals('45.1232', $lineItem->unitAmount);
+      $this->assertEquals('45.15', $lineItem->totalAmount);
+  }
+
+  public function testSale_withLineItemsSingleZeroAmounts()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [[
+              'quantity' => '1.0232',
+              'name' => 'Name #1',
+              'kind' => Braintree\TransactionLineItem::DEBIT,
+              'unitAmount' => '45.1232',
+              'totalAmount' => '45.15',
+              'discountAmount' => '0',
+              'taxAmount' => '0',
+              'unitTaxAmount' => '0',
+          ]]
+      ]);
+
+      $this->assertTrue($result->success);
+      $transaction = $result->transaction;
+      $lineItems = $transaction->lineItems();
+      $this->assertEquals(1, sizeof($lineItems));
+
+      $lineItem = $lineItems[0];
+      $this->assertEquals('1.0232', $lineItem->quantity);
+      $this->assertEquals('Name #1', $lineItem->name);
+      $this->assertEquals(Braintree\TransactionLineItem::DEBIT, $lineItem->kind);
+      $this->assertEquals('45.1232', $lineItem->unitAmount);
+      $this->assertEquals('45.15', $lineItem->totalAmount);
+      $this->assertEquals('0', $lineItem->discountAmount);
+      $this->assertEquals('0', $lineItem->taxAmount);
+      $this->assertEquals('0', $lineItem->unitTaxAmount);
+  }
+
+  public function testSale_withLineItemsSingle()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '45.15',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [[
+              'quantity' => '1.0232',
+              'name' => 'Name #1',
+              'description' => 'Description #1',
+              'kind' => Braintree\TransactionLineItem::DEBIT,
+              'unitAmount' => '45.1232',
+              'unitTaxAmount' => '1.23',
+              'unitOfMeasure' => 'gallon',
+              'discountAmount' => '1.02',
+              'taxAmount' => '4.50',
+              'totalAmount' => '45.15',
+              'productCode' => '23434',
+              'commodityCode' => '9SAASSD8724',
+              'url' => 'https://example.com/products/23434',
+          ]]
+      ]);
+
+      $this->assertTrue($result->success);
+      $transaction = $result->transaction;
+      $lineItems = $transaction->lineItems();
+      $this->assertEquals(1, sizeof($lineItems));
+
+      $lineItem = $lineItems[0];
+      $this->assertEquals('1.0232', $lineItem->quantity);
+      $this->assertEquals('Name #1', $lineItem->name);
+      $this->assertEquals('Description #1', $lineItem->description);
+      $this->assertEquals(Braintree\TransactionLineItem::DEBIT, $lineItem->kind);
+      $this->assertEquals('45.1232', $lineItem->unitAmount);
+      $this->assertEquals('1.23', $lineItem->unitTaxAmount);
+      $this->assertEquals('gallon', $lineItem->unitOfMeasure);
+      $this->assertEquals('1.02', $lineItem->discountAmount);
+      $this->assertEquals('4.50', $lineItem->taxAmount);
+      $this->assertEquals('45.15', $lineItem->totalAmount);
+      $this->assertEquals('23434', $lineItem->productCode);
+      $this->assertEquals('9SAASSD8724', $lineItem->commodityCode);
+      $this->assertEquals('https://example.com/products/23434', $lineItem->url);
+  }
+
+  public function testSale_withLineItemsMultiple()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'description' => 'Description #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '2.02',
+                  'name' => 'Name #2',
+                  'description' => 'Description #2',
+                  'kind' => Braintree\TransactionLineItem::CREDIT,
+                  'unitAmount' => '5',
+                  'unitOfMeasure' => 'gallon',
+                  'totalAmount' => '45.15',
+              ]
+          ]
+      ]);
+
+      $this->assertTrue($result->success);
+      $transaction = $result->transaction;
+      $lineItems = $transaction->lineItems();
+      $this->assertEquals(2, sizeof($lineItems));
+
+      $lineItem1 = null;
+      foreach ($lineItems as $lineItem) {
+          if ($lineItem->name == 'Name #1') {
+              $lineItem1 = $lineItem;
+              break;
+          }
+      }
+      if ($lineItem1 == null) {
+          $this->fail('TransactionLineItem with name \'Name #1\' not returned.');
+      }
+      $this->assertEquals('1.0232', $lineItem1->quantity);
+      $this->assertEquals('Name #1', $lineItem1->name);
+      $this->assertEquals('Description #1', $lineItem1->description);
+      $this->assertEquals(Braintree\TransactionLineItem::DEBIT, $lineItem1->kind);
+      $this->assertEquals('45.1232', $lineItem1->unitAmount);
+      $this->assertEquals('gallon', $lineItem1->unitOfMeasure);
+      $this->assertEquals('1.02', $lineItem1->discountAmount);
+      $this->assertEquals('4.50', $lineItem1->taxAmount);
+      $this->assertEquals('45.15', $lineItem1->totalAmount);
+      $this->assertEquals('23434', $lineItem1->productCode);
+      $this->assertEquals('9SAASSD8724', $lineItem1->commodityCode);
+
+      $lineItem2 = null;
+      foreach ($lineItems as $lineItem) {
+          if ($lineItem->name == 'Name #2') {
+              $lineItem2 = $lineItem;
+              break;
+          }
+      }
+      if ($lineItem2 == null) {
+          $this->fail('TransactionLineItem with name \'Name #2\' not returned.');
+      }
+      $this->assertEquals('2.02', $lineItem2->quantity);
+      $this->assertEquals('Name #2', $lineItem2->name);
+      $this->assertEquals('Description #2', $lineItem2->description);
+      $this->assertEquals(Braintree\TransactionLineItem::CREDIT, $lineItem2->kind);
+      $this->assertEquals('5', $lineItem2->unitAmount);
+      $this->assertEquals('gallon', $lineItem2->unitOfMeasure);
+      $this->assertEquals('45.15', $lineItem2->totalAmount);
+      $this->assertEquals(null, $lineItem2->discountAmount);
+      $this->assertEquals(null, $lineItem2->taxAmount);
+      $this->assertEquals(null, $lineItem2->productCode);
+      $this->assertEquals(null, $lineItem2->commodityCode);
+  }
+
+  public function testSale_withLineItemsValidationErrorCommodityCodeIsTooLong()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+				  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '0123456789123',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_COMMODITY_CODE_IS_TOO_LONG,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('commodityCode')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorDescriptionIsTooLong()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'description' => "This is a line item description which is far too long. Like, way too long to be practical. We don't like how long this line item description is.",
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_DESCRIPTION_IS_TOO_LONG,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('description')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorDiscountAmountIsTooLarge()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '2147483648',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_DISCOUNT_AMOUNT_IS_TOO_LARGE,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('discountAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorDiscountAmountCannotBeNegative()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '-2',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_DISCOUNT_AMOUNT_CANNOT_BE_NEGATIVE,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('discountAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorTaxAmountFormatIsInvalid()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.511',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+          ],
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_TAX_AMOUNT_FORMAT_IS_INVALID,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index0')->onAttribute('taxAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorTaxAmountIsTooLarge()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '2147483648',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+          ],
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_TAX_AMOUNT_IS_TOO_LARGE,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index0')->onAttribute('taxAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorTaxAmountCannotBeNegative()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '-2',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+          ],
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_TAX_AMOUNT_CANNOT_BE_NEGATIVE,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index0')->onAttribute('taxAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorKindIsRequired()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_KIND_IS_REQUIRED,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('kind')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorNameIsRequired()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_NAME_IS_REQUIRED,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('name')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorNameIsTooLong()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => '123456789012345678901234567890123456',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_NAME_IS_TOO_LONG,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('name')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorProductCodeIsTooLong()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\TransactionLineItem::CREDIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '123456789012345678901234567890123456',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_PRODUCT_CODE_IS_TOO_LONG,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('productCode')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorQuantityIsRequired()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'name' => 'Name #2',
+                  'kind' => Braintree\TransactionLineItem::CREDIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_QUANTITY_IS_REQUIRED,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('quantity')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorQuantityIsTooLarge()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '2147483648',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\TransactionLineItem::CREDIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_QUANTITY_IS_TOO_LARGE,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('quantity')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorTotalAmountIsRequired()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\TransactionLineItem::CREDIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_TOTAL_AMOUNT_IS_REQUIRED,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('totalAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorTotalAmountIsTooLarge()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\TransactionLineItem::CREDIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '2147483648',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_TOTAL_AMOUNT_IS_TOO_LARGE,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('totalAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorTotalAmountMustBeGreaterThanZero()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\TransactionLineItem::CREDIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '-2',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_TOTAL_AMOUNT_MUST_BE_GREATER_THAN_ZERO,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('totalAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorUnitAmountIsRequired()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\TransactionLineItem::CREDIT,
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_UNIT_AMOUNT_IS_REQUIRED,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('unitAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorUnitAmountIsTooLarge()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\TransactionLineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\TransactionLineItem::CREDIT,
+                  'unitAmount' => '2147483648',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_UNIT_AMOUNT_IS_TOO_LARGE,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('unitAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorUnitAmountMustBeGreaterThanZero()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\Transaction\LineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\Transaction\LineItem::CREDIT,
+                  'unitAmount' => '-2',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_UNIT_AMOUNT_MUST_BE_GREATER_THAN_ZERO,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('unitAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorUnitOfMeasureIsTooLong()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\Transaction\LineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.0232',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\Transaction\LineItem::CREDIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => '1234567890123',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_UNIT_OF_MEASURE_IS_TOO_LONG,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('unitOfMeasure')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorUnitTaxAmountFormatIsInvalid()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.2322',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\Transaction\LineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.2322',
+                  'name' => 'Name #2',
+				  'kind' => Braintree\Transaction\LineItem::CREDIT,
+                  'unitAmount' => '45.0122',
+                  'unitTaxAmount' => '2.012',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_UNIT_TAX_AMOUNT_FORMAT_IS_INVALID,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('unitTaxAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorUnitTaxAmountIsTooLarge()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.2322',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\Transaction\LineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitTaxAmount' => '1.23',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.2322',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\Transaction\LineItem::CREDIT,
+                  'unitAmount' => '45.0122',
+                  'unitTaxAmount' => '2147483648',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_UNIT_TAX_AMOUNT_IS_TOO_LARGE,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('unitTaxAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorUnitTaxAmountCannotBeNegative()
+  {
+      $result = Braintree\Transaction::sale([
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [
+              [
+                  'quantity' => '1.2322',
+                  'name' => 'Name #1',
+                  'kind' => Braintree\Transaction\LineItem::DEBIT,
+                  'unitAmount' => '45.1232',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ],
+              [
+                  'quantity' => '1.2322',
+                  'name' => 'Name #2',
+                  'kind' => Braintree\Transaction\LineItem::CREDIT,
+                  'unitAmount' => '45.0122',
+                  'unitTaxAmount' => '-1.23',
+                  'unitOfMeasure' => 'gallon',
+                  'discountAmount' => '1.02',
+                  'taxAmount' => '4.50',
+                  'totalAmount' => '45.15',
+                  'productCode' => '23434',
+                  'commodityCode' => '9SAASSD8724',
+              ]
+          ]
+      ]);
+
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_LINE_ITEM_UNIT_TAX_AMOUNT_CANNOT_BE_NEGATIVE,
+          $result->errors->forKey('transaction')->forKey('lineItems')->forKey('index1')->onAttribute('unitTaxAmount')[0]->code
+      );
+  }
+
+  public function testSale_withLineItemsValidationErrorTooManyLineItems()
+  {
+	  $transactionParams = [
+          'amount' => '35.05',
+          'creditCard' => [
+              'number' => Braintree\Test\CreditCardNumbers::$visa,
+              'expirationDate' => '05/2009',
+          ],
+          'lineItems' => [],
+      ];
+
+      for ($i = 0; $i < 250; $i++) {
+          array_push($transactionParams['lineItems'], [
+              'quantity' => '2.02',
+              'name' => 'Line item #' . $i,
+              'kind' => Braintree\Transaction\LineItem::CREDIT,
+              'unitAmount' => '5',
+              'unitOfMeasure' => 'gallon',
+              'totalAmount' => '10.1',
+          ]);
+      }
+
+      $result = Braintree\Transaction::sale($transactionParams);
+      $this->assertFalse($result->success);
+      $this->assertEquals(
+          Braintree\Error\Codes::TRANSACTION_TOO_MANY_LINE_ITEMS,
+          $result->errors->forKey('transaction')->onAttribute('lineItems')[0]->code
+      );
+  }
 
   public function testCreateTransactionUsingFakeApplePayNonce()
     {
@@ -322,12 +1567,29 @@ class TransactionTest extends Setup
     {
         $result = Braintree\Transaction::sale([
             'amount' => '1.02',
+            'applePayCard' => [
+                'number' => "370295001292109",
+                'cardholderName' => "JANE SMITH",
+                'cryptogram' => "AAAAAAAA/COBt84dnIEcwAA3gAAGhgEDoLABAAhAgAABAAAALnNCLw==",
+                'expirationMonth' => "10",
+                'expirationYear' => "17",
+                'eciIndicator' => "07"
+            ]
+        ]);
+        $this->assertTrue($result->success);
+    }
+
+  public function testCreateTransactionUsingRawApplePayParamsInSnakeCaseForBackwardsCompatibility()
+    {
+        $result = Braintree\Transaction::sale([
+            'amount' => '1.02',
             'apple_pay_card' => [
                 'number' => "370295001292109",
                 'cardholder_name' => "JANE SMITH",
                 'cryptogram' => "AAAAAAAA/COBt84dnIEcwAA3gAAGhgEDoLABAAhAgAABAAAALnNCLw==",
                 'expiration_month' => "10",
-                'expiration_year' => "17"
+                'expiration_year' => "17",
+                'eci_indicator' => "07"
             ]
         ]);
         $this->assertTrue($result->success);
@@ -349,9 +1611,9 @@ class TransactionTest extends Setup
         $this->assertNull($androidPayCardDetails->token);
         $this->assertSame(Braintree\CreditCard::DISCOVER, $androidPayCardDetails->virtualCardType);
         $this->assertSame("1117", $androidPayCardDetails->virtualCardLast4);
-        $this->assertSame(Braintree\CreditCard::VISA, $androidPayCardDetails->sourceCardType);
+        $this->assertSame(Braintree\CreditCard::DISCOVER, $androidPayCardDetails->sourceCardType);
         $this->assertSame("1111", $androidPayCardDetails->sourceCardLast4);
-        $this->assertSame("Visa 1111", $androidPayCardDetails->sourceDescription);
+        $this->assertSame("Discover 1111", $androidPayCardDetails->sourceDescription);
         $this->assertContains('android_pay', $androidPayCardDetails->imageUrl);
         $this->assertTrue(intval($androidPayCardDetails->expirationMonth) > 0);
         $this->assertTrue(intval($androidPayCardDetails->expirationYear) > 0);
@@ -405,6 +1667,38 @@ class TransactionTest extends Setup
         $this->assertTrue(intval($amexExpressCheckoutCardDetails->expirationYear) > 0);
     }
 
+    public function testCreateTransactionUsingFakeVenmoAccountNonceAndProfileId()
+    {
+        $result = Braintree\Transaction::sale(array(
+            'amount' => '47.00',
+            'merchantAccountId' => Test\Helper::fakeVenmoAccountMerchantAccountId(),
+            'paymentMethodNonce' => Braintree\Test\Nonces::$venmoAccount,
+            'options' => [
+                'venmo' => [
+                    'profileId' => "integration_venmo_merchant_public_id"
+                ]
+            ]
+        ));
+
+        $this->assertTrue($result->success);
+    }
+
+    public function testCreateTransactionUsingFakeVenmoAccountNonceAndProfileIdUsingSnakeCaseKeyforProfileId()
+    {
+        $result = Braintree\Transaction::sale(array(
+            'amount' => '47.00',
+            'merchantAccountId' => Test\Helper::fakeVenmoAccountMerchantAccountId(),
+            'paymentMethodNonce' => Braintree\Test\Nonces::$venmoAccount,
+            'options' => [
+                'venmo' => [
+                    'profile_id' => "integration_venmo_merchant_public_id"
+                ]
+            ]
+        ));
+
+        $this->assertTrue($result->success);
+    }
+
     public function testCreateTransactionUsingFakeVenmoAccountNonce()
     {
         $result = Braintree\Transaction::sale(array(
@@ -416,6 +1710,7 @@ class TransactionTest extends Setup
         $this->assertTrue($result->success);
         $transaction = $result->transaction;
         $this->assertEquals('47.00', $transaction->amount);
+        $this->assertEquals(Braintree\PaymentInstrumentType::VENMO_ACCOUNT, $transaction->paymentInstrumentType);
         $venmoAccountDetails = $transaction->venmoAccountDetails;
 
         $this->assertNull($venmoAccountDetails->token);
@@ -425,19 +1720,15 @@ class TransactionTest extends Setup
         $this->assertSame("Venmo-Joe-1", $venmoAccountDetails->venmoUserId);
     }
 
-    public function testCreateTransactionUsingFakeCoinbaseNonce()
+    public function testCannotCreateTransactionUsingFakeCoinbaseNonce()
     {
         $result = Braintree\Transaction::sale([
             'amount' => '17.00',
             'paymentMethodNonce' => Braintree\Test\Nonces::$coinbase
         ]);
 
-        $this->assertTrue($result->success);
-        $transaction = $result->transaction;
-        $this->assertNotNull($transaction->coinbaseDetails);
-        $this->assertNotNull($transaction->coinbaseDetails->userId);
-        $this->assertNotNull($transaction->coinbaseDetails->userName);
-        $this->assertNotNull($transaction->coinbaseDetails->userEmail);
+        $this->assertFalse($result->success);
+        $this->assertEquals(Braintree\Error\Codes::PAYMENT_METHOD_NO_LONGER_SUPPORTED, $result->errors->forKey('transaction')->onAttribute('base')[0]->code);
     }
 
   public function testCreateTransactionReturnsPaymentInstrumentType()
@@ -554,8 +1845,10 @@ class TransactionTest extends Setup
 
   public function testSaleWithRiskData()
     {
-        $result = Braintree\Transaction::sale([
+        $gateway = Test\Helper::advancedFraudIntegrationMerchantGateway();
+        $result = $gateway->transaction()->sale([
             'amount' => '100.00',
+            'deviceSessionId' => 'abc123',
             'creditCard' => [
                 'cardholderName' => 'The Cardholder',
                 'number' => '5105105105105100',
@@ -566,6 +1859,8 @@ class TransactionTest extends Setup
         $transaction = $result->transaction;
         $this->assertNotNull($transaction->riskData);
         $this->assertNotNull($transaction->riskData->decision);
+        $this->assertNotNull($transaction->riskData->id);
+        $this->assertNotNull($transaction->riskData->deviceDataCaptured);
     }
 
   public function testRecurring()
@@ -582,6 +1877,85 @@ class TransactionTest extends Setup
         $this->assertTrue($result->success);
         $transaction = $result->transaction;
         $this->assertEquals(true, $transaction->recurring);
+    }
+
+  public function testTransactionSourceWithRecurringFirst()
+    {
+        $result = Braintree\Transaction::sale([
+            'amount' => '100.00',
+            'transactionSource' => 'recurring_first',
+            'creditCard' => [
+                'cardholderName' => 'The Cardholder',
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+            ]
+        ]);
+        $this->assertTrue($result->success);
+        $transaction = $result->transaction;
+        $this->assertEquals(true, $transaction->recurring);
+    }
+
+  public function testTransactionSourceWithRecurring()
+    {
+        $result = Braintree\Transaction::sale([
+            'amount' => '100.00',
+            'transactionSource' => 'recurring',
+            'creditCard' => [
+                'cardholderName' => 'The Cardholder',
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+            ]
+        ]);
+        $this->assertTrue($result->success);
+        $transaction = $result->transaction;
+        $this->assertEquals(true, $transaction->recurring);
+    }
+
+  public function testTransactionSourceWithMerchant()
+    {
+        $result = Braintree\Transaction::sale([
+            'amount' => '100.00',
+            'transactionSource' => 'merchant',
+            'creditCard' => [
+                'cardholderName' => 'The Cardholder',
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+            ]
+        ]);
+        $this->assertTrue($result->success);
+        $transaction = $result->transaction;
+        $this->assertEquals(false, $transaction->recurring);
+    }
+
+  public function testTransactionSourceWithMoto()
+    {
+        $result = Braintree\Transaction::sale([
+            'amount' => '100.00',
+            'transactionSource' => 'moto',
+            'creditCard' => [
+                'cardholderName' => 'The Cardholder',
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+            ]
+        ]);
+        $this->assertTrue($result->success);
+        $transaction = $result->transaction;
+        $this->assertEquals(False, $transaction->recurring);
+    }
+
+  public function testTransactionSourceInvalid()
+    {
+        $result = Braintree\Transaction::sale([
+            'amount' => '100.00',
+            'transactionSource' => 'invalid_value',
+            'creditCard' => [
+                'cardholderName' => 'The Cardholder',
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+            ]
+        ]);
+        $this->assertFalse($result->success);
+        $this->assertEquals(Braintree\Error\Codes::TRANSACTION_TRANSACTION_SOURCE_IS_INVALID, $result->errors->forKey('transaction')->onAttribute('transactionSource')[0]->code);
     }
 
   public function testSale_withServiceFee()
@@ -647,7 +2021,7 @@ class TransactionTest extends Setup
         ]);
         $this->assertEquals(true, $result->success);
         $transaction = $result->transaction;
-        $this->assertEquals(true, $transaction->creditCardDetails->venmoSdk);
+        $this->assertEquals(false, $transaction->creditCardDetails->venmoSdk);
     }
 
   public function testSale_withVenmoSdkPaymentMethodCode()
@@ -808,8 +2182,8 @@ class TransactionTest extends Setup
       $transaction = $result->transaction;
 
       $this->assertNotNull($transaction->id);
-      $this->assertNotNull($transaction->createdAt);
-      $this->assertNotNull($transaction->updatedAt);
+      $this->assertInstanceOf('DateTime', $transaction->updatedAt);
+      $this->assertInstanceOf('DateTime', $transaction->createdAt);
       $this->assertNull($transaction->refundId);
 
       $this->assertEquals(Test\Helper::defaultMerchantAccountId(), $transaction->merchantAccountId);
@@ -1044,7 +2418,9 @@ class TransactionTest extends Setup
 
   public function testSale_withProcessorDecline()
     {
-        $result = Braintree\Transaction::sale([
+
+        $gateway = Test\Helper::integrationMerchantGateway();
+        $result = $gateway->transaction()->sale([
             'amount' => Braintree\Test\TransactionAmounts::$decline,
             'creditCard' => [
                 'number' => '5105105105105100',
@@ -1333,50 +2709,6 @@ class TransactionTest extends Setup
         Braintree\Transaction::submitForSettlement($transaction->id, '67.00', $params);
     }
 
-  public function testSubmitForSettlement_withDescriptorOnUnsupportedProcessor()
-    {
-        $transaction = Braintree\Transaction::saleNoValidate([
-            'amount' => '100.00',
-            'merchantAccountId' => Test\Helper::fakeAmexDirectMerchantAccountId(),
-            'creditCard' => [
-                'cardholderName' => 'The Cardholder',
-                'number' => Braintree\Test\CreditCardNumbers::$amexPayWithPoints['Success'],
-                'expirationDate' => '05/12'
-            ]
-        ]);
-
-        $params = [
-            'descriptor' => [
-                'name' => '123*123456789012345678',
-                'phone' => '3334445555',
-                'url' => 'ebay.com'
-            ]
-        ];
-
-        $this->assertEquals(Braintree\Transaction::AUTHORIZED, $transaction->status);
-        $submitResult = Braintree\Transaction::submitForSettlement($transaction->id, '67.00', $params);
-        $errors = $submitResult->errors->forKey('transaction')->onAttribute('base');
-        $this->assertEquals(Braintree\Error\Codes::TRANSACTION_PROCESSOR_DOES_NOT_SUPPORT_UPDATING_DESCRIPTOR, $errors[0]->code);
-    }
-
-  public function testSubmitForSettlement_withOrderIdOnUnsupportedProcessor()
-    {
-        $transaction = Braintree\Transaction::saleNoValidate([
-            'amount' => '100.00',
-            'merchantAccountId' => Test\Helper::fakeAmexDirectMerchantAccountId(),
-            'creditCard' => [
-                'cardholderName' => 'The Cardholder',
-                'number' => Braintree\Test\CreditCardNumbers::$amexPayWithPoints['Success'],
-                'expirationDate' => '05/12'
-            ]
-        ]);
-
-        $this->assertEquals(Braintree\Transaction::AUTHORIZED, $transaction->status);
-        $submitResult = Braintree\Transaction::submitForSettlement($transaction->id, '67.00', ['orderId' => 'ABC123']);
-        $errors = $submitResult->errors->forKey('transaction')->onAttribute('base');
-        $this->assertEquals(Braintree\Error\Codes::TRANSACTION_PROCESSOR_DOES_NOT_SUPPORT_UPDATING_ORDER_ID, $errors[0]->code);
-    }
-
   public function testSubmitForSettlementNoValidate_whenValidWithoutAmount()
     {
         $transaction = Braintree\Transaction::saleNoValidate([
@@ -1419,6 +2751,208 @@ class TransactionTest extends Setup
         $this->assertEquals(Braintree\Transaction::AUTHORIZED, $transaction->status);
         $this->setExpectedException('Braintree\Exception\ValidationsFailed');
         $submittedTransaction = Braintree\Transaction::submitForSettlementNoValidate($transaction->id, '101.00');
+    }
+
+  public function testUpdateDetails()
+    {
+        $transaction = Braintree\Transaction::saleNoValidate([
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+                ],
+            'options' => [
+                'submitForSettlement' => true
+            ]
+        ]);
+
+        $updateOptions = [
+            'amount' => '90.00',
+            'orderId' => '123',
+            'descriptor' => [
+                'name' => '123*123456789012345678',
+                'phone' => '3334445555',
+                'url' => 'ebay.com'
+            ]
+        ];
+
+        $result = Braintree\Transaction::updateDetails($transaction->id, $updateOptions);
+        $this->assertEquals(true, $result->success);
+        $this->assertEquals(Braintree\Transaction::SUBMITTED_FOR_SETTLEMENT, $result->transaction->status);
+        $this->assertEquals('90.00', $result->transaction->amount);
+    }
+
+  public function testUpdateDetails_withInvalidParams()
+    {
+        $transaction = Braintree\Transaction::saleNoValidate([
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+                ],
+            'options' => [
+                'submitForSettlement' => true
+            ]
+        ]);
+
+        $updateOptions = [
+            'amount' => '90.00',
+            'invalid' => 'some value'
+        ];
+
+        $this->setExpectedException('InvalidArgumentException', 'invalid keys: invalid');
+        Braintree\Transaction::updateDetails($transaction->id, $updateOptions);
+    }
+
+  public function testUpdateDetails_withInvalidAmount()
+    {
+        $transaction = Braintree\Transaction::saleNoValidate([
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+                ],
+            'options' => [
+                'submitForSettlement' => true
+            ]
+        ]);
+
+        $updateOptions = [
+            'amount' => '900.00',
+            'orderId' => '123',
+            'descriptor' => [
+                'name' => '123*123456789012345678',
+                'phone' => '3334445555',
+                'url' => 'ebay.com'
+            ]
+        ];
+
+        $result = Braintree\Transaction::updateDetails($transaction->id, $updateOptions);
+        $this->assertFalse($result->success);
+        $errors = $result->errors->forKey('transaction')->onAttribute('amount');
+        $this->assertEquals(Braintree\Error\Codes::TRANSACTION_SETTLEMENT_AMOUNT_IS_TOO_LARGE, $errors[0]->code);
+
+    }
+
+  public function testUpdateDetails_withInvalidDescriptor()
+    {
+        $transaction = Braintree\Transaction::saleNoValidate([
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+                ],
+            'options' => [
+                'submitForSettlement' => true
+            ]
+        ]);
+
+        $updateOptions = [
+            'amount' => '90.00',
+            'orderId' => '123',
+            'descriptor' => [
+                'name' => 'invalid name',
+                'phone' => 'invalid phone',
+                'url' => 'invalid way too long url'
+            ]
+        ];
+
+        $result = Braintree\Transaction::updateDetails($transaction->id, $updateOptions);
+        $this->assertFalse($result->success);
+        $errors = $result->errors->forKey('transaction')->forKey('descriptor')->onAttribute('name');
+        $this->assertEquals(Braintree\Error\Codes::DESCRIPTOR_NAME_FORMAT_IS_INVALID, $errors[0]->code);
+
+        $errors = $result->errors->forKey('transaction')->forKey('descriptor')->onAttribute('phone');
+        $this->assertEquals(Braintree\Error\Codes::DESCRIPTOR_PHONE_FORMAT_IS_INVALID, $errors[0]->code);
+
+        $errors = $result->errors->forKey('transaction')->forKey('descriptor')->onAttribute('url');
+        $this->assertEquals(Braintree\Error\Codes::DESCRIPTOR_URL_FORMAT_IS_INVALID, $errors[0]->code);
+    }
+
+  public function testUpdateDetails_withInvalidOrderId()
+    {
+        $transaction = Braintree\Transaction::saleNoValidate([
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+                ],
+            'options' => [
+                'submitForSettlement' => true
+            ]
+        ]);
+
+        $updateOptions = [
+            'amount' => '90.00',
+            'orderId' => str_repeat('x', 256),
+            'descriptor' => [
+                'name' => '123*123456789012345678',
+                'phone' => '3334445555',
+                'url' => 'ebay.com'
+            ]
+        ];
+
+        $result = Braintree\Transaction::updateDetails($transaction->id, $updateOptions);
+        $this->assertFalse($result->success);
+        $errors = $result->errors->forKey('transaction')->onAttribute('orderId');
+        $this->assertEquals(Braintree\Error\Codes::TRANSACTION_ORDER_ID_IS_TOO_LONG, $errors[0]->code);
+    }
+
+  public function testUpdateDetails_withInvalidProcessor()
+    {
+        $transaction = Braintree\Transaction::saleNoValidate([
+            'amount' => '100.00',
+            'merchantAccountId' => Test\Helper::fakeAmexDirectMerchantAccountId(),
+            'creditCard' => [
+                'cardholderName' => 'The Cardholder',
+                'number' => Braintree\Test\CreditCardNumbers::$amexPayWithPoints['Success'],
+                'expirationDate' => '05/12'
+            ],
+            'options' => [
+                'submitForSettlement' => true
+            ]
+        ]);
+
+        $updateOptions = [
+            'amount' => '90.00',
+            'orderId' => '123',
+            'descriptor' => [
+                'name' => '123*123456789012345678',
+                'phone' => '3334445555',
+                'url' => 'ebay.com'
+            ]
+        ];
+
+        $result = Braintree\Transaction::updateDetails($transaction->id, $updateOptions);
+        $this->assertFalse($result->success);
+        $errors = $result->errors->forKey('transaction')->onAttribute('base');
+        $this->assertEquals(Braintree\Error\Codes::TRANSACTION_PROCESSOR_DOES_NOT_SUPPORT_UPDATING_DETAILS, $errors[0]->code);
+    }
+
+  public function testUpdateDetails_withBadStatus()
+    {
+        $transaction = Braintree\Transaction::saleNoValidate([
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+            ]
+        ]);
+
+        $updateOptions = [
+            'amount' => '90.00',
+            'orderId' => '123',
+            'descriptor' => [
+                'name' => '123*123456789012345678',
+                'phone' => '3334445555',
+                'url' => 'ebay.com'
+            ]
+        ];
+
+        $result = Braintree\Transaction::updateDetails($transaction->id, $updateOptions);
+        $this->assertFalse($result->success);
+        $errors = $result->errors->forKey('transaction')->onAttribute('base');
+        $this->assertEquals(Braintree\Error\Codes::TRANSACTION_CANNOT_UPDATE_DETAILS_NOT_SUBMITTED_FOR_SETTLEMENT, $errors[0]->code);
     }
 
   public function testVoid()
@@ -1589,6 +3123,18 @@ class TransactionTest extends Setup
         $this->assertEquals(new DateTime('2013-04-10'), $disbursementDetails->disbursementDate);
     }
 
+  public function testFindExposesAuthorizationAdjustments()
+    {
+        $transaction = Braintree\Transaction::find("authadjustmenttransaction");
+
+        $authorizationAdjustment = $transaction->authorizationAdjustments[0];
+        $this->assertEquals('-20.00', $authorizationAdjustment->amount);
+        $this->assertInstanceOf('DateTime', $authorizationAdjustment->timestamp);
+        $this->assertEquals(true, $authorizationAdjustment->success);
+        $this->assertEquals('1000', $authorizationAdjustment->processorResponseCode);
+        $this->assertEquals('Approved', $authorizationAdjustment->processorResponseText);
+    }
+
   public function testFindExposesDisputes()
     {
         $transaction = Braintree\Transaction::find("disputedtransaction");
@@ -1602,6 +3148,9 @@ class TransactionTest extends Setup
         $this->assertEquals(new DateTime('2014-03-21'), $dispute->replyByDate);
         $this->assertEquals("disputedtransaction", $dispute->transactionDetails->id);
         $this->assertEquals("1000.00", $dispute->transactionDetails->amount);
+        $this->assertEquals(Braintree\Dispute::CHARGEBACK, $dispute->kind);
+        $this->assertEquals(new DateTime('2014-03-01'), $dispute->dateOpened);
+        $this->assertEquals(new DateTime('2014-03-07'), $dispute->dateWon);
     }
 
   public function testFindExposesThreeDSecureInfo()
@@ -1644,6 +3193,7 @@ class TransactionTest extends Setup
         $this->assertNotNull($transaction->paypalDetails->payerId);
         $this->assertNotNull($transaction->paypalDetails->payerFirstName);
         $this->assertNotNull($transaction->paypalDetails->payerLastName);
+        $this->assertNotNull($transaction->paypalDetails->payerStatus);
         $this->assertNotNull($transaction->paypalDetails->sellerProtectionStatus);
         $this->assertNotNull($transaction->paypalDetails->captureId);
         $this->assertNotNull($transaction->paypalDetails->refundId);
@@ -1771,6 +3321,23 @@ class TransactionTest extends Setup
         $this->assertTrue($result->success);
     }
 
+  public function testSale_withRiskData()
+    {
+        $result = Braintree\Transaction::sale([
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12',
+            ],
+            'riskData' => [
+                'customer_browser' => 'IE5',
+                'customer_ip' => '192.168.0.1'
+            ]
+        ]);
+
+        $this->assertTrue($result->success);
+    }
+
   public function testSale_withDescriptor()
     {
         $result = Braintree\Transaction::sale([
@@ -1878,6 +3445,34 @@ class TransactionTest extends Setup
                 'expirationDate' => '05/09'
             ],
             'options' => [
+                'threeDSecure' => [
+                    'required' => true
+                ]
+            ]
+        ]);
+        $this->assertFalse($result->success);
+        $this->assertEquals(Braintree\Transaction::THREE_D_SECURE, $result->transaction->gatewayRejectionReason);
+    }
+
+  public function testSale_withThreeDSecureOptionRequiredInSnakeCase()
+    {
+        $http = new HttpClientApi(Braintree\Configuration::$global);
+        $nonce = $http->nonce_for_new_card([
+            "creditCard" => [
+                "number" => "4111111111111111",
+                "expirationMonth" => "11",
+                "expirationYear" => "2099"
+            ]
+        ]);
+
+        $result = Braintree\Transaction::sale([
+            'merchantAccountId' => Test\Helper::threeDSecureMerchantAccountId(),
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '4111111111111111',
+                'expirationDate' => '05/09'
+            ],
+            'options' => [
                 'three_d_secure' => [
                     'required' => true
                 ]
@@ -1953,6 +3548,117 @@ class TransactionTest extends Setup
         $this->assertEquals(
             Braintree\Error\Codes::TRANSACTION_THREE_D_SECURE_TRANSACTION_DATA_DOESNT_MATCH_VERIFY,
             $errors[0]->code
+        );
+    }
+
+  public function testSale_withThreeDSecurePassThru()
+    {
+        $result = Braintree\Transaction::sale([
+            'merchantAccountId' => Test\Helper::threeDSecureMerchantAccountId(),
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/09'
+            ],
+            'threeDSecurePassThru' => [
+                'eciFlag' => '02',
+                'cavv' => 'some_cavv',
+                'xid' => 'some_xid'
+            ],
+        ]);
+        $this->assertTrue($result->success);
+        $this->assertEquals(Braintree\Transaction::AUTHORIZED, $result->transaction->status);
+    }
+
+  public function testSale_returnsErrorsWhenThreeDSecurePassThruMerchantAcountDoesNotSupportCardType()
+    {
+        $result = Braintree\Transaction::sale([
+            'merchantAccountId' => 'adyen_ma',
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/09'
+            ],
+            'threeDSecurePassThru' => [
+                'eciFlag' => '02',
+                'cavv' => 'some_cavv',
+                'xid' => 'some_xid'
+            ],
+        ]);
+        $this->assertFalse($result->success);
+        $errors = $result->errors->forKey('transaction');
+        $this->assertEquals(
+            Braintree\Error\Codes::TRANSACTION_THREE_D_SECURE_MERCHANT_ACCOUNT_DOES_NOT_SUPPORT_CARD_TYPE,
+            $errors->onAttribute("merchantAccountId")[0]->code
+        );
+    }
+
+  public function testSale_returnsErrorsWhenThreeDSecurePassThruIsMissingEciFlag()
+    {
+        $result = Braintree\Transaction::sale([
+            'merchantAccountId' => Test\Helper::threeDSecureMerchantAccountId(),
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/09'
+            ],
+            'threeDSecurePassThru' => [
+                'eciFlag' => '',
+                'cavv' => 'some_cavv',
+                'xid' => 'some_xid'
+            ],
+        ]);
+        $this->assertFalse($result->success);
+        $errors = $result->errors->forKey('transaction')->forKey('threeDSecurePassThru');
+        $this->assertEquals(
+            Braintree\Error\Codes::TRANSACTION_THREE_D_SECURE_ECI_FLAG_IS_REQUIRED,
+            $errors->onAttribute("eciFlag")[0]->code
+        );
+    }
+
+  public function testSale_returnsErrorsWhenThreeDSecurePassThruIsMissingCavvOrXid()
+    {
+        $result = Braintree\Transaction::sale([
+            'merchantAccountId' => Test\Helper::threeDSecureMerchantAccountId(),
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/09'
+            ],
+            'threeDSecurePassThru' => [
+                'eciFlag' => '06',
+                'cavv' => '',
+                'xid' => ''
+            ],
+        ]);
+        $this->assertFalse($result->success);
+        $errors = $result->errors->forKey('transaction')->forKey('threeDSecurePassThru');
+        $this->assertEquals(
+            Braintree\Error\Codes::TRANSACTION_THREE_D_SECURE_CAVV_IS_REQUIRED,
+            $errors->onAttribute("cavv")[0]->code
+        );
+    }
+
+  public function testSale_returnsErrorsWhenThreeDSecurePassThruEciFlagIsInvalid()
+    {
+        $result = Braintree\Transaction::sale([
+            'merchantAccountId' => Test\Helper::threeDSecureMerchantAccountId(),
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/09'
+            ],
+            'threeDSecurePassThru' => [
+                'eciFlag' => 'bad_eci_flag',
+                'cavv' => 'some_cavv',
+                'xid' => 'some_xid'
+            ],
+        ]);
+        $this->assertFalse($result->success);
+        $errors = $result->errors->forKey('transaction')->forKey('threeDSecurePassThru');
+        $this->assertEquals(
+            Braintree\Error\Codes::TRANSACTION_THREE_D_SECURE_ECI_FLAG_IS_INVALID,
+            $errors->onAttribute("eciFlag")[0]->code
         );
     }
 
@@ -2231,6 +3937,25 @@ class TransactionTest extends Setup
         );
     }
 
+  public function testRefundWithOptionsParam()
+    {
+        $transaction = $this->createTransactionToRefund();
+        $options = [
+            "orderId" => 'abcd',
+            "amount" => '1.00'
+        ];
+        $result = Braintree\Transaction::refund($transaction->id, $options);
+        $this->assertTrue($result->success);
+        $this->assertEquals(
+            'abcd',
+            $result->transaction->orderId
+        );
+        $this->assertEquals(
+            '1.00',
+            $result->transaction->amount
+        );
+    }
+
   public function testGatewayRejectionOnApplicationIncomplete()
     {
         $gateway = new Braintree\Gateway([
@@ -2506,6 +4231,7 @@ class TransactionTest extends Setup
         ]);
 
         $this->assertEquals(Braintree\CreditCard::PAYROLL_YES, $transaction->creditCardDetails->payroll);
+        $this->assertEquals("MSA", $transaction->creditCardDetails->productId);
 
         $transaction = Braintree\Transaction::saleNoValidate([
             'amount' => '100.00',
@@ -2516,6 +4242,7 @@ class TransactionTest extends Setup
         ]);
 
         $this->assertEquals(Braintree\CreditCard::HEALTHCARE_YES, $transaction->creditCardDetails->healthcare);
+        $this->assertEquals("J3", $transaction->creditCardDetails->productId);
 
         $transaction = Braintree\Transaction::saleNoValidate([
             'amount' => '100.00',
@@ -2607,6 +4334,97 @@ class TransactionTest extends Setup
         $this->assertEquals('payer@example.com', $transaction->paypalDetails->payerEmail);
         $this->assertNotNull($transaction->paypalDetails->imageUrl);
         $this->assertNotNull($transaction->paypalDetails->debugId);
+        $this->setExpectedException('Braintree\Exception\NotFound');
+        Braintree\PaymentMethod::find($paymentMethodToken);
+    }
+
+  public function testCreate_withPayeeId()
+    {
+        $paymentMethodToken = 'PAYPAL_TOKEN-' . strval(rand());
+        $http = new HttpClientApi(Braintree\Configuration::$global);
+        $nonce = $http->nonceForPayPalAccount([
+            'paypal_account' => [
+                'consent_code' => 'PAYPAL_CONSENT_CODE',
+                'token' => $paymentMethodToken
+            ]
+        ]);
+
+        $result = Braintree\Transaction::sale([
+            'amount' => Braintree\Test\TransactionAmounts::$authorize,
+            'paymentMethodNonce' => $nonce,
+            'paypalAccount' => [
+                'payeeId' => 'fake-payee-id'
+            ]
+        ]);
+
+        $this->assertTrue($result->success);
+        $transaction = $result->transaction;
+        $this->assertEquals('payer@example.com', $transaction->paypalDetails->payerEmail);
+        $this->assertNotNull($transaction->paypalDetails->imageUrl);
+        $this->assertNotNull($transaction->paypalDetails->debugId);
+        $this->assertNotNull($transaction->paypalDetails->payeeId);
+        $this->setExpectedException('Braintree\Exception\NotFound');
+        Braintree\PaymentMethod::find($paymentMethodToken);
+    }
+
+  public function testCreate_withPayeeIdInOptions()
+    {
+        $paymentMethodToken = 'PAYPAL_TOKEN-' . strval(rand());
+        $http = new HttpClientApi(Braintree\Configuration::$global);
+        $nonce = $http->nonceForPayPalAccount([
+            'paypal_account' => [
+                'consent_code' => 'PAYPAL_CONSENT_CODE',
+                'token' => $paymentMethodToken
+            ]
+        ]);
+
+        $result = Braintree\Transaction::sale([
+            'amount' => Braintree\Test\TransactionAmounts::$authorize,
+            'paymentMethodNonce' => $nonce,
+            'paypalAccount' => [],
+            'options' => [
+                'payeeId' => 'fake-payee-id'
+            ]
+        ]);
+
+        $this->assertTrue($result->success);
+        $transaction = $result->transaction;
+        $this->assertEquals('payer@example.com', $transaction->paypalDetails->payerEmail);
+        $this->assertNotNull($transaction->paypalDetails->imageUrl);
+        $this->assertNotNull($transaction->paypalDetails->debugId);
+        $this->assertNotNull($transaction->paypalDetails->payeeId);
+        $this->setExpectedException('Braintree\Exception\NotFound');
+        Braintree\PaymentMethod::find($paymentMethodToken);
+    }
+
+  public function testCreate_withPayeeIdInOptionsPayPal()
+    {
+        $paymentMethodToken = 'PAYPAL_TOKEN-' . strval(rand());
+        $http = new HttpClientApi(Braintree\Configuration::$global);
+        $nonce = $http->nonceForPayPalAccount([
+            'paypal_account' => [
+                'consent_code' => 'PAYPAL_CONSENT_CODE',
+                'token' => $paymentMethodToken
+            ]
+        ]);
+
+        $result = Braintree\Transaction::sale([
+            'amount' => Braintree\Test\TransactionAmounts::$authorize,
+            'paymentMethodNonce' => $nonce,
+            'paypalAccount' => [],
+            'options' => [
+                'paypal' => [
+                    'payeeId' => 'fake-payee-id'
+                ]
+            ]
+        ]);
+
+        $this->assertTrue($result->success);
+        $transaction = $result->transaction;
+        $this->assertEquals('payer@example.com', $transaction->paypalDetails->payerEmail);
+        $this->assertNotNull($transaction->paypalDetails->imageUrl);
+        $this->assertNotNull($transaction->paypalDetails->debugId);
+        $this->assertNotNull($transaction->paypalDetails->payeeId);
         $this->setExpectedException('Braintree\Exception\NotFound');
         Braintree\PaymentMethod::find($paymentMethodToken);
     }
@@ -3144,7 +4962,7 @@ class TransactionTest extends Setup
   public function testIncludeProcessorSettlementResponseForSettlementDeclinedTransaction()
     {
         $result = Braintree\Transaction::sale([
-            "paymentMethodNonce" => Braintree\Test\Nonces::$paypalFuturePayment,
+            "paymentMethodNonce" => Braintree\Test\Nonces::$visaCheckoutVisa,
             "amount" => "100",
             "options" => [
                 "submitForSettlement" => true
@@ -3165,7 +4983,7 @@ class TransactionTest extends Setup
   public function testIncludeProcessorSettlementResponseForSettlementPendingTransaction()
     {
         $result = Braintree\Transaction::sale([
-            "paymentMethodNonce" => Braintree\Test\Nonces::$paypalFuturePayment,
+            "paymentMethodNonce" => Braintree\Test\Nonces::$visaCheckoutVisa,
             "amount" => "100",
             "options" => [
                 "submitForSettlement" => true
@@ -3491,7 +5309,68 @@ class TransactionTest extends Setup
         $this->assertEquals(Braintree\Error\Codes::TRANSACTION_CANNOT_SUBMIT_FOR_PARTIAL_SETTLEMENT, $baseErrors[0]->code);
     }
 
-    public function testFacilitatorDetailsAreReturnedOnTransactionsCreatedViaNonceGranting()
+  public function testSubmitForPartialSettlement_withOrderId()
+    {
+        $transaction = Braintree\Transaction::saleNoValidate([
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+            ]
+        ]);
+
+        $this->assertEquals(Braintree\Transaction::AUTHORIZED, $transaction->status);
+        $submitResult = Braintree\Transaction::submitForPartialSettlement($transaction->id, '67.00', ['orderId' => 'ABC123']);
+        $this->assertEquals(true, $submitResult->success);
+        $this->assertEquals(Braintree\Transaction::SUBMITTED_FOR_SETTLEMENT, $submitResult->transaction->status);
+        $this->assertEquals('ABC123', $submitResult->transaction->orderId);
+        $this->assertEquals('67.00', $submitResult->transaction->amount);
+    }
+
+  public function testSubmitForPartialSettlement_withDescriptor()
+    {
+        $transaction = Braintree\Transaction::saleNoValidate([
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+            ]
+        ]);
+
+        $params = [
+            'descriptor' => [
+                'name' => '123*123456789012345678',
+                'phone' => '3334445555',
+                'url' => 'ebay.com'
+            ]
+        ];
+
+        $this->assertEquals(Braintree\Transaction::AUTHORIZED, $transaction->status);
+        $submitResult = Braintree\Transaction::submitForPartialSettlement($transaction->id, '67.00', $params);
+        $this->assertEquals(true, $submitResult->success);
+        $this->assertEquals(Braintree\Transaction::SUBMITTED_FOR_SETTLEMENT, $submitResult->transaction->status);
+        $this->assertEquals('123*123456789012345678', $submitResult->transaction->descriptor->name);
+        $this->assertEquals('3334445555', $submitResult->transaction->descriptor->phone);
+        $this->assertEquals('ebay.com', $submitResult->transaction->descriptor->url);
+    }
+
+  public function testSubmitForPartialSettlement_withInvalidParams()
+    {
+        $transaction = Braintree\Transaction::saleNoValidate([
+            'amount' => '100.00',
+            'creditCard' => [
+                'number' => '5105105105105100',
+                'expirationDate' => '05/12'
+            ]
+        ]);
+
+        $params = ['invalid' => 'invalid'];
+
+        $this->setExpectedException('InvalidArgumentException', 'invalid keys: invalid');
+        Braintree\Transaction::submitForPartialSettlement($transaction->id, '67.00', $params);
+    }
+
+    public function testFacilitatedAndFacilitatorDetailsAreReturnedOnTransactionsCreatedViaNonceGranting()
     {
         $partnerMerchantGateway = new Braintree\Gateway([
             'environment' => 'development',
@@ -3533,8 +5412,21 @@ class TransactionTest extends Setup
 
         $result = Braintree\Transaction::sale([
             'amount' => '100.00',
-            'paymentMethodNonce' => $grantResult->nonce
+            'paymentMethodNonce' => $grantResult->paymentMethodNonce->nonce
         ]);
+
+        $this->assertEquals(
+            $result->transaction->facilitatedDetails->merchantId,
+            'integration_merchant_id'
+        );
+        $this->assertEquals(
+            $result->transaction->facilitatedDetails->merchantName,
+            '14ladders'
+        );
+        $this->assertEquals(
+            $result->transaction->facilitatedDetails->paymentMethodNonce,
+            $grantResult->paymentMethodNonce->nonce
+        );
 
         $this->assertEquals(
             $result->transaction->facilitatorDetails->oauthApplicationClientId,
@@ -3544,9 +5436,64 @@ class TransactionTest extends Setup
             $result->transaction->facilitatorDetails->oauthApplicationName,
             "PseudoShop"
         );
+
+        $this->assertNull($result->transaction->billing["postalCode"]);
     }
 
-    public function testTransactionsCanBeCreatedWithSharedParams()
+    public function testBillingPostalCodeIsReturnedWhenRequestedOnTransactionsCreatedViaNonceGranting()
+    {
+        $partnerMerchantGateway = new Braintree\Gateway([
+            'environment' => 'development',
+            'merchantId' => 'integration_merchant_public_id',
+            'publicKey' => 'oauth_app_partner_user_public_key',
+            'privateKey' => 'oauth_app_partner_user_private_key'
+        ]);
+
+        $customer = $partnerMerchantGateway->customer()->create([
+            'firstName' => 'Joe',
+            'lastName' => 'Brown'
+        ])->customer;
+        $creditCard = $partnerMerchantGateway->creditCard()->create([
+            'customerId' => $customer->id,
+            'cardholderName' => 'Adam Davis',
+            'number' => '4111111111111111',
+            'expirationDate' => '05/2009',
+            'billingAddress' => [
+                'firstName' => 'Adam',
+                'lastName' => 'Davis',
+                'postalCode' => '95131'
+            ]
+        ])->creditCard;
+
+        $oauthAppGateway = new Braintree\Gateway([
+            'clientId' =>  'client_id$development$integration_client_id',
+            'clientSecret' => 'client_secret$development$integration_client_secret'
+        ]);
+
+        $code = Test\Braintree\OAuthTestHelper::createGrant($oauthAppGateway, [
+            'merchant_public_id' => 'integration_merchant_id',
+            'scope' => 'grant_payment_method'
+        ]);
+
+        $credentials = $oauthAppGateway->oauth()->createTokenFromCode([
+            'code' => $code,
+        ]);
+
+        $grantingGateway = new Braintree\Gateway([
+            'accessToken' => $credentials->accessToken
+        ]);
+
+        $grantResult = $grantingGateway->paymentMethod()->grant($creditCard->token, ['allow_vaulting' => false, 'include_billing_postal_code' => true]);
+
+        $result = Braintree\Transaction::sale([
+            'amount' => '100.00',
+            'paymentMethodNonce' => $grantResult->paymentMethodNonce->nonce
+        ]);
+
+        $this->assertEquals($result->transaction->billing["postalCode"], "95131");
+    }
+
+    public function testTransactionsCanBeCreatedWithSharedPaymentMethodToken()
     {
         $partnerMerchantGateway = new Braintree\Gateway([
             'environment' => 'development',
@@ -3592,6 +5539,71 @@ class TransactionTest extends Setup
         $result = $oauthAccesTokenGateway->transaction()->sale([
             'amount' => '100.00',
             'sharedPaymentMethodToken' => $creditCard->token,
+            'sharedCustomerId' => $customer->id,
+            'sharedShippingAddressId' => $address->id,
+            'sharedBillingAddressId' => $address->id
+        ]);
+
+        $this->assertEquals(
+            $result->transaction->shippingDetails->firstName,
+            $address->firstName
+        );
+        $this->assertEquals(
+            $result->transaction->billingDetails->firstName,
+            $address->firstName
+        );
+    }
+
+    public function testTransactionsCanBeCreatedWithSharedPaymentMethodNonce()
+    {
+        $partnerMerchantGateway = new Braintree\Gateway([
+            'environment' => 'development',
+            'merchantId' => 'integration_merchant_public_id',
+            'publicKey' => 'oauth_app_partner_user_public_key',
+            'privateKey' => 'oauth_app_partner_user_private_key'
+        ]);
+
+        $customer = $partnerMerchantGateway->customer()->create([
+            'firstName' => 'Joe',
+            'lastName' => 'Brown'
+        ])->customer;
+        $address = $partnerMerchantGateway->address()->create([
+            'customerId' => $customer->id,
+            'firstName' => 'Dan',
+            'lastName' => 'Smith',
+        ])->address;
+        $creditCard = $partnerMerchantGateway->creditCard()->create([
+            'customerId' => $customer->id,
+            'cardholderName' => 'Adam Davis',
+            'number' => '4111111111111111',
+            'expirationDate' => '05/2009'
+        ])->creditCard;
+
+        $oauthAppGateway = new Braintree\Gateway([
+            'clientId' =>  'client_id$development$integration_client_id',
+            'clientSecret' => 'client_secret$development$integration_client_secret'
+        ]);
+
+        $code = Test\Braintree\OAuthTestHelper::createGrant($oauthAppGateway, [
+            'merchant_public_id' => 'integration_merchant_id',
+            'scope' => 'read_write,shared_vault_transactions'
+        ]);
+
+        $credentials = $oauthAppGateway->oauth()->createTokenFromCode([
+            'code' => $code,
+        ]);
+
+        $oauthAccesTokenGateway = new Braintree\Gateway([
+            'accessToken' => $credentials->accessToken
+        ]);
+
+        $sharedNonce = $partnerMerchantGateway->paymentMethodNonce()->create(
+            $creditCard->token
+        )->paymentMethodNonce->nonce;
+
+        $result = $oauthAccesTokenGateway->transaction()->sale([
+            'amount' => '100.00',
+            'sharedPaymentMethodNonce' => $sharedNonce,
             'sharedCustomerId' => $customer->id,
             'sharedShippingAddressId' => $address->id,
             'sharedBillingAddressId' => $address->id

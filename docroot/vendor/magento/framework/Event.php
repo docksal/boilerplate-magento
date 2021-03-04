@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -13,6 +13,7 @@ namespace Magento\Framework;
 
 /**
  * @api
+ * @since 100.0.2
  */
 class Event extends \Magento\Framework\DataObject
 {
@@ -88,7 +89,7 @@ class Event extends \Magento\Framework\DataObject
      */
     public function getName()
     {
-        return isset($this->_data['name']) ? $this->_data['name'] : null;
+        return $this->_data['name'] ?? null;
     }
 
     /**

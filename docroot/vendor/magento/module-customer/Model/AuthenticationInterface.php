@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Customer\Model;
@@ -8,6 +8,11 @@ namespace Magento\Customer\Model;
 use Magento\Framework\Exception\InvalidEmailOrPasswordException;
 use Magento\Framework\Exception\State\UserLockedException;
 
+/**
+ * Interface \Magento\Customer\Model\AuthenticationInterface
+ * @api
+ * @since 100.1.0
+ */
 interface AuthenticationInterface
 {
     /**
@@ -15,6 +20,7 @@ interface AuthenticationInterface
      *
      * @param int $customerId
      * @return void
+     * @since 100.1.0
      */
     public function processAuthenticationFailure($customerId);
 
@@ -23,6 +29,7 @@ interface AuthenticationInterface
      *
      * @param int $customerId
      * @return void
+     * @since 100.1.0
      */
     public function unlock($customerId);
 
@@ -31,6 +38,7 @@ interface AuthenticationInterface
      *
      * @param int $customerId
      * @return boolean
+     * @since 100.1.0
      */
     public function isLocked($customerId);
 
@@ -42,6 +50,7 @@ interface AuthenticationInterface
      * @return boolean
      * @throws InvalidEmailOrPasswordException
      * @throws UserLockedException
+     * @since 100.1.0
      */
     public function authenticate($customerId, $password);
 }

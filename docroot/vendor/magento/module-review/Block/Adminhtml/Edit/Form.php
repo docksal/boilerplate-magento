@@ -1,14 +1,14 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+
+namespace Magento\Review\Block\Adminhtml\Edit;
 
 /**
  * Adminhtml Review Edit Form
  */
-namespace Magento\Review\Block\Adminhtml\Edit;
-
 class Form extends \Magento\Backend\Block\Widget\Form\Generic
 {
     /**
@@ -75,6 +75,17 @@ class Form extends \Magento\Backend\Block\Widget\Form\Generic
         $review = $this->_coreRegistry->registry('review_data');
         $product = $this->_productFactory->create()->load($review->getEntityPkValue());
 
+        $formActionParams = [
+            'id' => $this->getRequest()->getParam('id'),
+            'ret' => $this->_coreRegistry->registry('ret')
+        ];
+        if ($this->getRequest()->getParam('productId')) {
+            $formActionParams['productId'] = $this->getRequest()->getParam('productId');
+        }
+        if ($this->getRequest()->getParam('customerId')) {
+            $formActionParams['customerId'] = $this->getRequest()->getParam('customerId');
+        }
+
         /** @var \Magento\Framework\Data\Form $form */
         $form = $this->_formFactory->create(
             [
@@ -82,10 +93,7 @@ class Form extends \Magento\Backend\Block\Widget\Form\Generic
                     'id' => 'edit_form',
                     'action' => $this->getUrl(
                         'review/*/save',
-                        [
-                            'id' => $this->getRequest()->getParam('id'),
-                            'ret' => $this->_coreRegistry->registry('ret')
-                        ]
+                        $formActionParams
                     ),
                     'method' => 'post',
                 ],
@@ -132,7 +140,9 @@ class Form extends \Magento\Backend\Block\Widget\Form\Generic
             'note',
             [
                 'label' => __('Summary Rating'),
-                'text' => $this->getLayout()->createBlock('Magento\Review\Block\Adminhtml\Rating\Summary')->toHtml()
+                'text' => $this->getLayout()->createBlock(
+                    \Magento\Review\Block\Adminhtml\Rating\Summary::class
+                )->toHtml()
             ]
         );
 
@@ -143,7 +153,7 @@ class Form extends \Magento\Backend\Block\Widget\Form\Generic
                 'label' => __('Detailed Rating'),
                 'required' => true,
                 'text' => '<div id="rating_detail">' . $this->getLayout()->createBlock(
-                    'Magento\Review\Block\Adminhtml\Rating\Detailed'
+                    \Magento\Review\Block\Adminhtml\Rating\Detailed::class
                 )->toHtml() . '</div>'
             ]
         );
@@ -174,7 +184,7 @@ class Form extends \Magento\Backend\Block\Widget\Form\Generic
                 ]
             );
             $renderer = $this->getLayout()->createBlock(
-                'Magento\Backend\Block\Store\Switcher\Form\Renderer\Fieldset\Element'
+                \Magento\Backend\Block\Store\Switcher\Form\Renderer\Fieldset\Element::class
             );
             $field->setRenderer($renderer);
             $review->setSelectStores($review->getStores());

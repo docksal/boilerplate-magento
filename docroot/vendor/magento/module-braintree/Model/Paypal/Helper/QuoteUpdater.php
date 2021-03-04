@@ -1,17 +1,18 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Braintree\Model\Paypal\Helper;
 
-use Magento\Braintree\Gateway\Config\PayPal\Config;
-use Magento\Braintree\Model\Ui\PayPal\ConfigProvider;
-use Magento\Braintree\Observer\DataAssignObserver;
-use Magento\Framework\Exception\LocalizedException;
-use Magento\Quote\Api\CartRepositoryInterface;
 use Magento\Quote\Model\Quote;
 use Magento\Quote\Model\Quote\Address;
+use Magento\Quote\Model\Quote\Payment;
+use Magento\Quote\Api\CartRepositoryInterface;
+use Magento\Braintree\Model\Ui\PayPal\ConfigProvider;
+use Magento\Framework\Exception\LocalizedException;
+use Magento\Braintree\Observer\DataAssignObserver;
+use Magento\Braintree\Gateway\Config\PayPal\Config;
 
 /**
  * Class QuoteUpdater
@@ -83,6 +84,14 @@ class QuoteUpdater extends AbstractHelper
 
         $quote->collectTotals();
 
+        /**
+         * Unset shipping assignment to prevent from saving / applying outdated data
+         * @see \Magento\Quote\Model\QuoteRepository\SaveHandler::processShippingAssignment
+         */
+        if ($quote->getExtensionAttributes()) {
+            $quote->getExtensionAttributes()->setShippingAssignments(null);
+        }
+
         $this->quoteRepository->save($quote);
     }
 
@@ -114,13 +123,18 @@ class QuoteUpdater extends AbstractHelper
     {
         $shippingAddress = $quote->getShippingAddress();
 
-        $shippingAddress->setLastname($details['lastName']);
-        $shippingAddress->setFirstname($details['firstName']);
+        $shippingAddress->setLastname($this->getShippingRecipientLastName($details));
+        $shippingAddress->setFirstname($this->getShippingRecipientFirstName($details));
         $shippingAddress->setEmail($details['email']);
 
         $shippingAddress->setCollectShippingRates(true);
 
         $this->updateAddressData($shippingAddress, $details['shippingAddress']);
+
+        // PayPal's address supposes not saving against customer account
+        $shippingAddress->setSaveInAddressBook(false);
+        $shippingAddress->setSameAsBilling(false);
+        $shippingAddress->unsCustomerAddressId();
     }
 
     /**
@@ -134,7 +148,7 @@ class QuoteUpdater extends AbstractHelper
     {
         $billingAddress = $quote->getBillingAddress();
 
-        if ($this->config->isRequiredBillingAddress()) {
+        if ($this->config->isRequiredBillingAddress() && !empty($details['billingAddress'])) {
             $this->updateAddressData($billingAddress, $details['billingAddress']);
         } else {
             $this->updateAddressData($billingAddress, $details['shippingAddress']);
@@ -143,6 +157,11 @@ class QuoteUpdater extends AbstractHelper
         $billingAddress->setFirstname($details['firstName']);
         $billingAddress->setLastname($details['lastName']);
         $billingAddress->setEmail($details['email']);
+
+        // PayPal's address supposes not saving against customer account
+        $billingAddress->setSaveInAddressBook(false);
+        $billingAddress->setSameAsBilling(false);
+        $billingAddress->unsCustomerAddressId();
     }
 
     /**
@@ -154,14 +173,45 @@ class QuoteUpdater extends AbstractHelper
      */
     private function updateAddressData(Address $address, array $addressData)
     {
-        $extendedAddress = isset($addressData['extendedAddress'])
-            ? $addressData['extendedAddress']
+        $extendedAddress = isset($addressData['line2'])
+            ? $addressData['line2']
             : null;
 
-        $address->setStreet([$addressData['streetAddress'], $extendedAddress]);
-        $address->setCity($addressData['locality']);
-        $address->setRegionCode($addressData['region']);
-        $address->setCountryId($addressData['countryCodeAlpha2']);
+        $address->setStreet([$addressData['line1'], $extendedAddress]);
+        $address->setCity($addressData['city']);
+        $address->setRegionCode($addressData['state']);
+        $address->setCountryId($addressData['countryCode']);
         $address->setPostcode($addressData['postalCode']);
+
+        // PayPal's address supposes not saving against customer account
+        $address->setSaveInAddressBook(false);
+        $address->setSameAsBilling(false);
+        $address->setCustomerAddressId(null);
+    }
+
+    /**
+     * Returns shipping recipient first name.
+     *
+     * @param array $details
+     * @return string
+     */
+    private function getShippingRecipientFirstName(array $details)
+    {
+        return isset($details['shippingAddress']['recipientName'])
+            ? explode(' ', $details['shippingAddress']['recipientName'], 2)[0]
+            : $details['firstName'];
+    }
+
+    /**
+     * Returns shipping recipient last name.
+     *
+     * @param array $details
+     * @return string
+     */
+    private function getShippingRecipientLastName(array $details)
+    {
+        return isset($details['shippingAddress']['recipientName'])
+            ? explode(' ', $details['shippingAddress']['recipientName'], 2)[1]
+            : $details['lastName'];
     }
 }

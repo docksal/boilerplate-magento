@@ -1,14 +1,17 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
-/**
- * Cache frontend decorator that limits the cleaning scope within a tag
- */
 namespace Magento\Framework\Cache\Frontend\Decorator;
 
+/**
+ * Cache frontend decorator that limits the cleaning scope within a tag
+ *
+ * @api
+ * @since 100.0.2
+ */
 class TagScope extends \Magento\Framework\Cache\Frontend\Decorator\Bare
 {
     /**

@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Catalog\Test\Unit\Model\ResourceModel\Product;
@@ -16,10 +16,13 @@ use Magento\Framework\DB\Select;
 use Magento\Framework\EntityManager\EntityMetadataInterface;
 use Magento\Framework\EntityManager\MetadataPool;
 use Magento\Framework\TestFramework\Unit\Helper\ObjectManager;
-use Magento\Store\Api\StoreResolverInterface;
+use Magento\Store\Model\StoreManagerInterface;
 use Magento\Store\Model\Store;
 
-class StatusBaseSelectProcessorTest extends \PHPUnit_Framework_TestCase
+/**
+ * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
+ */
+class StatusBaseSelectProcessorTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var Config|\PHPUnit_Framework_MockObject_MockObject
@@ -32,9 +35,9 @@ class StatusBaseSelectProcessorTest extends \PHPUnit_Framework_TestCase
     private $metadataPool;
 
     /**
-     * @var StoreResolverInterface|\PHPUnit_Framework_MockObject_MockObject
+     * @var StoreManagerInterface|\PHPUnit_Framework_MockObject_MockObject
      */
-    private $storeResolver;
+    private $storeManager;
 
     /**
      * @var Select|\PHPUnit_Framework_MockObject_MockObject
@@ -50,13 +53,13 @@ class StatusBaseSelectProcessorTest extends \PHPUnit_Framework_TestCase
     {
         $this->eavConfig = $this->getMockBuilder(Config::class)->disableOriginalConstructor()->getMock();
         $this->metadataPool = $this->getMockBuilder(MetadataPool::class)->disableOriginalConstructor()->getMock();
-        $this->storeResolver = $this->getMockBuilder(StoreResolverInterface::class)->getMock();
+        $this->storeManager = $this->getMockBuilder(StoreManagerInterface::class)->getMock();
         $this->select = $this->getMockBuilder(Select::class)->disableOriginalConstructor()->getMock();
 
         $this->statusBaseSelectProcessor =  (new ObjectManager($this))->getObject(StatusBaseSelectProcessor::class, [
             'eavConfig' => $this->eavConfig,
             'metadataPool' => $this->metadataPool,
-            'storeResolver' => $this->storeResolver,
+            'storeManager' => $this->storeManager,
         ]);
     }
 
@@ -67,7 +70,7 @@ class StatusBaseSelectProcessorTest extends \PHPUnit_Framework_TestCase
         $attributeId = 2;
         $currentStoreId = 1;
 
-        $metadata = $this->getMock(EntityMetadataInterface::class);
+        $metadata = $this->createMock(EntityMetadataInterface::class);
         $metadata->expects($this->once())
             ->method('getLinkField')
             ->willReturn($linkField);
@@ -91,8 +94,14 @@ class StatusBaseSelectProcessorTest extends \PHPUnit_Framework_TestCase
             ->with(Product::ENTITY, ProductInterface::STATUS)
             ->willReturn($statusAttribute);
 
-        $this->storeResolver->expects($this->once())
-            ->method('getCurrentStoreId')
+        $storeMock = $this->getMockBuilder(\Magento\Store\Api\Data\StoreInterface::class)->getMock();
+
+        $this->storeManager->expects($this->once())
+            ->method('getStore')
+            ->willReturn($storeMock);
+
+        $storeMock->expects($this->once())
+            ->method('getId')
             ->willReturn($currentStoreId);
 
         $this->select->expects($this->at(0))
@@ -100,9 +109,9 @@ class StatusBaseSelectProcessorTest extends \PHPUnit_Framework_TestCase
             ->with(
                 ['status_global_attr' => $backendTable],
                 "status_global_attr.{$linkField} = "
-                    . BaseSelectProcessorInterface::PRODUCT_TABLE_ALIAS . ".{$linkField}"
-                    . " AND status_global_attr.attribute_id = {$attributeId}"
-                    . ' AND status_global_attr.store_id = ' . Store::DEFAULT_STORE_ID,
+                . BaseSelectProcessorInterface::PRODUCT_TABLE_ALIAS . ".{$linkField}"
+                . " AND status_global_attr.attribute_id = {$attributeId}"
+                . ' AND status_global_attr.store_id = ' . Store::DEFAULT_STORE_ID,
                 []
             )
             ->willReturnSelf();
@@ -111,8 +120,8 @@ class StatusBaseSelectProcessorTest extends \PHPUnit_Framework_TestCase
             ->with(
                 ['status_attr' => $backendTable],
                 "status_attr.{$linkField} = " . BaseSelectProcessorInterface::PRODUCT_TABLE_ALIAS . ".{$linkField}"
-                    . " AND status_attr.attribute_id = {$attributeId}"
-                    . " AND status_attr.store_id = {$currentStoreId}",
+                . " AND status_attr.attribute_id = {$attributeId}"
+                . " AND status_attr.store_id = {$currentStoreId}",
                 []
             )
             ->willReturnSelf();

@@ -40,7 +40,7 @@ class GitLab
     {
         $this->io = $io;
         $this->config = $config;
-        $this->process = $process ?: new ProcessExecutor();
+        $this->process = $process ?: new ProcessExecutor($io);
         $this->remoteFilesystem = $remoteFilesystem ?: Factory::createRemoteFilesystem($this->io, $config);
     }
 
@@ -53,7 +53,10 @@ class GitLab
      */
     public function authorizeOAuth($originUrl)
     {
-        if (!in_array($originUrl, $this->config->get('gitlab-domains'), true)) {
+        // before composer 1.9, origin URLs had no port number in them
+        $bcOriginUrl = preg_replace('{:\d+}', '', $originUrl);
+
+        if (!in_array($originUrl, $this->config->get('gitlab-domains'), true) && !in_array($bcOriginUrl, $this->config->get('gitlab-domains'), true)) {
             return false;
         }
 
@@ -64,12 +67,28 @@ class GitLab
             return true;
         }
 
+        // if available use token from composer config
+        $authTokens = $this->config->get('gitlab-token');
+
+        if (isset($authTokens[$originUrl])) {
+            $this->io->setAuthentication($originUrl, $authTokens[$originUrl], 'private-token');
+
+            return true;
+        }
+
+        if (isset($authTokens[$bcOriginUrl])) {
+            $this->io->setAuthentication($originUrl, $authTokens[$bcOriginUrl], 'private-token');
+
+            return true;
+        }
+
         return false;
     }
 
     /**
      * Authorizes a GitLab domain interactively via OAuth.
      *
+     * @param string $scheme    Scheme used in the origin URL
      * @param string $originUrl The host this GitLab instance is located at
      * @param string $message   The reason this authorization is required
      *
@@ -102,8 +121,8 @@ class GitLab
                         $this->io->writeError('Maximum number of login attempts exceeded. Please try again later.');
                     }
 
-                    $this->io->writeError('You can also manually create a personal token at '.$scheme.'://'.$originUrl.'/profile/applications');
-                    $this->io->writeError('Add it using "composer config gitlab-oauth.'.$originUrl.' <token>"');
+                    $this->io->writeError('You can also manually create a personal token at '.$scheme.'://'.$originUrl.'/profile/personal_access_tokens');
+                    $this->io->writeError('Add it using "composer config --global --auth gitlab-token.'.$originUrl.' <token>"');
 
                     continue;
                 }
@@ -134,7 +153,7 @@ class GitLab
             'username' => $username,
             'password' => $password,
             'grant_type' => 'password',
-        ));
+        ), null, '&');
         $options = array(
             'retry-auth-failure' => false,
             'http' => array(

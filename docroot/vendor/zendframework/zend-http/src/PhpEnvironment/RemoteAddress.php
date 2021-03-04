@@ -1,10 +1,8 @@
 <?php
 /**
- * Zend Framework (http://framework.zend.com/)
- *
- * @link      http://github.com/zendframework/zf2 for the canonical source repository
- * @copyright Copyright (c) 2005-2015 Zend Technologies USA Inc. (http://www.zend.com)
- * @license   http://framework.zend.com/license/new-bsd New BSD License
+ * @see       https://github.com/zendframework/zend-http for the canonical source repository
+ * @copyright Copyright (c) 2005-2017 Zend Technologies USA Inc. (http://www.zend.com)
+ * @license   https://github.com/zendframework/zend-http/blob/master/LICENSE.md New BSD License
  */
 
 namespace Zend\Http\PhpEnvironment;
@@ -31,7 +29,7 @@ class RemoteAddress
      *
      * @var array
      */
-    protected $trustedProxies = array();
+    protected $trustedProxies = [];
 
     /**
      * HTTP header to introspect for proxies
@@ -40,7 +38,6 @@ class RemoteAddress
      */
     protected $proxyHeader = 'HTTP_X_FORWARDED_FOR';
 
-
     /**
      * Changes proxy handling setting.
      *
@@ -48,7 +45,7 @@ class RemoteAddress
      * at session read, so this is the only way to switch setting.
      *
      * @param  bool  $useProxy Whether to check also proxied IP addresses.
-     * @return RemoteAddress
+     * @return $this
      */
     public function setUseProxy($useProxy = true)
     {
@@ -70,7 +67,7 @@ class RemoteAddress
      * Set list of trusted proxy addresses
      *
      * @param  array $trustedProxies
-     * @return RemoteAddress
+     * @return $this
      */
     public function setTrustedProxies(array $trustedProxies)
     {
@@ -82,7 +79,7 @@ class RemoteAddress
      * Set the header to introspect for proxy IPs
      *
      * @param  string $header
-     * @return RemoteAddress
+     * @return $this
      */
     public function setProxyHeader($header = 'X-Forwarded-For')
     {
@@ -118,14 +115,14 @@ class RemoteAddress
      */
     protected function getIpAddressFromProxy()
     {
-        if (!$this->useProxy
-            || (isset($_SERVER['REMOTE_ADDR']) && !in_array($_SERVER['REMOTE_ADDR'], $this->trustedProxies))
+        if (! $this->useProxy
+            || (isset($_SERVER['REMOTE_ADDR']) && ! in_array($_SERVER['REMOTE_ADDR'], $this->trustedProxies))
         ) {
             return false;
         }
 
         $header = $this->proxyHeader;
-        if (!isset($_SERVER[$header]) || empty($_SERVER[$header])) {
+        if (! isset($_SERVER[$header]) || empty($_SERVER[$header])) {
             return false;
         }
 

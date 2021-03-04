@@ -14,6 +14,7 @@ namespace Monolog\Handler;
 use Exception;
 use Monolog\Formatter\LineFormatter;
 use Monolog\Logger;
+use Monolog\Utils;
 use PhpConsole\Connector;
 use PhpConsole\Handler;
 use PhpConsole\Helper;
@@ -66,10 +67,10 @@ class PHPConsoleHandler extends AbstractProcessingHandler
     private $connector;
 
     /**
-     * @param array $options See \Monolog\Handler\PHPConsoleHandler::$options for more details
-     * @param Connector|null $connector Instance of \PhpConsole\Connector class (optional)
-     * @param int $level
-     * @param bool $bubble
+     * @param  array          $options   See \Monolog\Handler\PHPConsoleHandler::$options for more details
+     * @param  Connector|null $connector Instance of \PhpConsole\Connector class (optional)
+     * @param  int            $level
+     * @param  bool           $bubble
      * @throws Exception
      */
     public function __construct(array $options = array(), Connector $connector = null, $level = Logger::DEBUG, $bubble = true)
@@ -188,7 +189,7 @@ class PHPConsoleHandler extends AbstractProcessingHandler
         $tags = $this->getRecordTags($record);
         $message = $record['message'];
         if ($record['context']) {
-            $message .= ' ' . json_encode($this->connector->getDumper()->dump(array_filter($record['context'])));
+            $message .= ' ' . Utils::jsonEncode($this->connector->getDumper()->dump(array_filter($record['context'])), null, true);
         }
         $this->connector->getDebugDispatcher()->dispatchDebug($message, $tags, $this->options['classesPartialsTraceIgnore']);
     }

@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\Stdlib;
@@ -9,6 +9,7 @@ namespace Magento\Framework\Stdlib;
  * Magento methods to work with string
  *
  * @api
+ * @since 100.0.2
  */
 class StringUtils
 {
@@ -148,7 +149,7 @@ class StringUtils
      */
     public function strlen($string)
     {
-        return iconv_strlen($string, self::ICONV_CHARSET);
+        return mb_strlen($string, self::ICONV_CHARSET);
     }
 
     /**
@@ -159,15 +160,11 @@ class StringUtils
      */
     public function cleanString($string)
     {
-        if ('"libiconv"' == ICONV_IMPL) {
-            return iconv(self::ICONV_CHARSET, self::ICONV_CHARSET . '//IGNORE', $string);
-        } else {
-            return $string;
-        }
+        return mb_convert_encoding($string, self::ICONV_CHARSET);
     }
 
     /**
-     * Pass through to iconv_substr()
+     * Pass through to mb_substr()
      *
      * @param string $string
      * @param int $offset
@@ -180,7 +177,7 @@ class StringUtils
         if ($length === null) {
             $length = $this->strlen($string) - $offset;
         }
-        return iconv_substr($string, $offset, $length, self::ICONV_CHARSET);
+        return mb_substr($string, $offset, $length, self::ICONV_CHARSET);
     }
 
     /**
@@ -212,6 +209,6 @@ class StringUtils
      */
     public function strpos($haystack, $needle, $offset = null)
     {
-        return iconv_strpos($haystack, $needle, $offset, self::ICONV_CHARSET);
+        return mb_strpos($haystack, $needle, $offset, self::ICONV_CHARSET);
     }
 }

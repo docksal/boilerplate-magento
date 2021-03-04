@@ -157,4 +157,39 @@ interface ConfigInterface
      * @return int
      */
     public function getBreakAfter();
+
+    /**
+     * Get number of seconds to wait before completely failing to break the lock
+     *
+     * @return int
+     */
+    public function getFailAfter();
+
+    /**
+     * Get list of redis sentinels
+     *
+     * @return string
+     */
+    public function getSentinelServers();
+
+    /**
+     * Get sentinel master name
+     *
+     * @return string
+     */
+    public function getSentinelMaster();
+
+    /**
+     * Verify master status flag
+     *
+     * @return string
+     */
+    public function getSentinelVerifyMaster();
+
+    /**
+     * Connection retries for sentinels
+     *
+     * @return string
+     */
+    public function getSentinelConnectRetries();
 }

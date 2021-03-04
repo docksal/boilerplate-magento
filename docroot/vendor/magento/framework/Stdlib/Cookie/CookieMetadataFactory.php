@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -11,6 +11,7 @@ use Magento\Framework\ObjectManagerInterface;
 /**
  * CookieMetadataFactory is used to construct SensitiveCookieMetadata and PublicCookieMetadata objects.
  * @api
+ * @since 100.0.2
  */
 class CookieMetadataFactory
 {
@@ -36,7 +37,7 @@ class CookieMetadataFactory
     public function createSensitiveCookieMetadata($metadata = [])
     {
         return $this->objectManager->create(
-            'Magento\Framework\Stdlib\Cookie\SensitiveCookieMetadata',
+            \Magento\Framework\Stdlib\Cookie\SensitiveCookieMetadata::class,
             ['metadata' => $metadata]
         );
     }
@@ -50,7 +51,7 @@ class CookieMetadataFactory
     public function createPublicCookieMetadata($metadata = [])
     {
         return $this->objectManager->create(
-            'Magento\Framework\Stdlib\Cookie\PublicCookieMetadata',
+            \Magento\Framework\Stdlib\Cookie\PublicCookieMetadata::class,
             ['metadata' => $metadata]
         );
     }
@@ -64,7 +65,7 @@ class CookieMetadataFactory
     public function createCookieMetadata($metadata = [])
     {
         return $this->objectManager->create(
-            'Magento\Framework\Stdlib\Cookie\CookieMetadata',
+            \Magento\Framework\Stdlib\Cookie\CookieMetadata::class,
             ['metadata' => $metadata]
         );
     }

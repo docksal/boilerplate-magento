@@ -1,9 +1,9 @@
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
-/*jshint browser:true jquery:true*/
-/*global alert*/
+
+/* @api */
 (function (factory) {
     'use strict';
 
@@ -20,8 +20,14 @@
     } else {
         factory(jQuery);
     }
-}(function ($, cvvValidator, creditCardNumberValidator, expirationDateValidator, monthValidator, creditCardData) {
+}(function ($, cvvValidator, creditCardNumberValidator, yearValidator, monthValidator, creditCardData) {
     'use strict';
+
+    $('.payment-method-content input[type="number"]').on('keyup', function () {
+        if ($(this).val() < 0) {
+            $(this).val($(this).val().replace(/^-/, ''));
+        }
+    });
 
     $.each({
         'validate-card-type': [
@@ -32,17 +38,17 @@
 
                 if (!creditCardNumberValidator(number).isValid) {
                     return false;
-                } else {
-                    cardInfo = creditCardNumberValidator(number).card;
-
-                    for (i = 0, l = allowedTypes.length; i < l; i++) {
-                        if (cardInfo.title == allowedTypes[i].type) {
-                            return true;
-                        }
-                    }
-
-                    return false;
                 }
+
+                cardInfo = creditCardNumberValidator(number).card;
+
+                for (i = 0, l = allowedTypes.length; i < l; i++) {
+                    if (cardInfo.title == allowedTypes[i].type) { //eslint-disable-line eqeqeq
+                        return true;
+                    }
+                }
+
+                return false;
             },
             $.mage.__('Please enter a valid credit card type number.')
         ],
@@ -50,7 +56,8 @@
 
             /**
              * Validate credit card number based on mod 10
-             * @param {String} number - credit card number
+             *
+             * @param {*} number - credit card number
              * @return {Boolean}
              */
             function (number) {
@@ -61,7 +68,8 @@
         'validate-card-date': [
 
             /**
-             * Validate credit card number based on mod 10
+             * Validate credit card expiration month
+             *
              * @param {String} date - month
              * @return {Boolean}
              */
@@ -73,8 +81,9 @@
         'validate-card-cvv': [
 
             /**
-             * Validate credit card number based on mod 10
-             * @param {String} cvv - month
+             * Validate cvv
+             *
+             * @param {String} cvv - card verification value
              * @return {Boolean}
              */
             function (cvv) {
@@ -87,12 +96,13 @@
         'validate-card-year': [
 
             /**
-             * Validate credit card number based on mod 10
-             * @param {String} date - month
+             * Validate credit card expiration year
+             *
+             * @param {String} date - year
              * @return {Boolean}
              */
             function (date) {
-                return monthValidator(date).isValid;
+                return yearValidator(date).isValid;
             },
             $.mage.__('Incorrect credit card expiration year.')
         ]

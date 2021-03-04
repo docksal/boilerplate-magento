@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\View\Asset;
@@ -8,6 +8,11 @@ namespace Magento\Framework\View\Asset;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\App\State;
 
+/**
+ * Helper class for static files minification related processes.
+ * @api
+ * @since 100.0.2
+ */
 class Minification
 {
     /**
@@ -60,7 +65,7 @@ class Minification
         if (!isset($this->configCache[self::XML_PATH_MINIFICATION_ENABLED][$contentType])) {
             $this->configCache[self::XML_PATH_MINIFICATION_ENABLED][$contentType] =
                 $this->appState->getMode() != State::MODE_DEVELOPER &&
-                (bool)$this->scopeConfig->isSetFlag(
+                $this->scopeConfig->isSetFlag(
                     sprintf(self::XML_PATH_MINIFICATION_ENABLED, $contentType),
                     $this->scope
                 );
@@ -79,8 +84,7 @@ class Minification
     {
         $extension = pathinfo($filename, PATHINFO_EXTENSION);
 
-        if (
-            $this->isEnabled($extension) &&
+        if ($this->isEnabled($extension) &&
             !$this->isExcluded($filename) &&
             !$this->isMinifiedFilename($filename)
         ) {
@@ -99,8 +103,7 @@ class Minification
     {
         $extension = pathinfo($filename, PATHINFO_EXTENSION);
 
-        if (
-            $this->isEnabled($extension) &&
+        if ($this->isEnabled($extension) &&
             !$this->isExcluded($filename) &&
             $this->isMinifiedFilename($filename)
         ) {
@@ -110,6 +113,8 @@ class Minification
     }
 
     /**
+     * Is Minified Filename
+     *
      * @param string $filename
      * @return bool
      */
@@ -119,6 +124,8 @@ class Minification
     }
 
     /**
+     * Is Excluded
+     *
      * @param string $filename
      * @return boolean
      */
@@ -133,6 +140,8 @@ class Minification
     }
 
     /**
+     * Get Excludes
+     *
      * @param string $contentType
      * @return string[]
      */
@@ -141,12 +150,35 @@ class Minification
         if (!isset($this->configCache[self::XML_PATH_MINIFICATION_EXCLUDES][$contentType])) {
             $this->configCache[self::XML_PATH_MINIFICATION_EXCLUDES][$contentType] = [];
             $key = sprintf(self::XML_PATH_MINIFICATION_EXCLUDES, $contentType);
-            foreach (explode("\n", $this->scopeConfig->getValue($key, $this->scope)) as $exclude) {
+            $excludeValues = $this->getMinificationExcludeValues($key);
+            foreach ($excludeValues as $exclude) {
                 if (trim($exclude) != '') {
                     $this->configCache[self::XML_PATH_MINIFICATION_EXCLUDES][$contentType][] = trim($exclude);
                 }
-            };
+            }
         }
         return $this->configCache[self::XML_PATH_MINIFICATION_EXCLUDES][$contentType];
+    }
+
+    /**
+     * Get minification exclude values from configuration
+     *
+     * @param string $key
+     * @return string[]
+     */
+    private function getMinificationExcludeValues($key)
+    {
+        $configValues = $this->scopeConfig->getValue($key, $this->scope) ?? [];
+        //value used to be a string separated by 'newline' separator so we need to convert it to array
+        if (!is_array($configValues)) {
+            $configValuesFromString = [];
+            foreach (explode("\n", $configValues) as $exclude) {
+                if (trim($exclude) != '') {
+                    $configValuesFromString[] = trim($exclude);
+                }
+            }
+            $configValues = $configValuesFromString;
+        }
+        return array_values($configValues);
     }
 }

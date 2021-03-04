@@ -1,10 +1,8 @@
 <?php
 /**
- * Zend Framework (http://framework.zend.com/)
- *
- * @link      http://github.com/zendframework/zf2 for the canonical source repository
- * @copyright Copyright (c) 2005-2015 Zend Technologies USA Inc. (http://www.zend.com)
- * @license   http://framework.zend.com/license/new-bsd New BSD License
+ * @see       https://github.com/zendframework/zend-http for the canonical source repository
+ * @copyright Copyright (c) 2005-2017 Zend Technologies USA Inc. (http://www.zend.com)
+ * @license   https://github.com/zendframework/zend-http/blob/master/LICENSE.md New BSD License
  */
 
 namespace Zend\Http\Header;
@@ -31,13 +29,13 @@ abstract class AbstractLocation implements HeaderInterface
      *
      * @var UriInterface
      */
-    protected $uri = null;
+    protected $uri;
 
     /**
      * Create location-based header from string
      *
      * @param string $headerLine
-     * @return AbstractLocation
+     * @return static
      * @throws Exception\InvalidArgumentException
      */
     public static function fromString($headerLine)
@@ -64,7 +62,7 @@ abstract class AbstractLocation implements HeaderInterface
      * Set the URI/URL for this header, this can be a string or an instance of Zend\Uri\Http
      *
      * @param string|UriInterface $uri
-     * @return AbstractLocation
+     * @return $this
      * @throws Exception\InvalidArgumentException
      */
     public function setUri($uri)
@@ -78,8 +76,14 @@ abstract class AbstractLocation implements HeaderInterface
                     $e->getCode(),
                     $e
                 );
+            } catch (UriException\InvalidArgumentException $e) {
+                throw new Exception\InvalidArgumentException(
+                    sprintf('Invalid URI passed as string (%s)', (string) $uri),
+                    $e->getCode(),
+                    $e
+                );
             }
-        } elseif (!($uri instanceof UriInterface)) {
+        } elseif (! ($uri instanceof UriInterface)) {
             throw new Exception\InvalidArgumentException('URI must be an instance of Zend\Uri\Http or a string');
         }
         $this->uri = $uri;

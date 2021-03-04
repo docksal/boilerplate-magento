@@ -1,14 +1,16 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+
 namespace Magento\Cms\Model;
 
 use Magento\Cms\Api\Data;
 use Magento\Cms\Api\PageRepositoryInterface;
 use Magento\Framework\Api\DataObjectHelper;
-use Magento\Framework\Api\SortOrder;
+use Magento\Framework\Api\SearchCriteria\CollectionProcessorInterface;
+use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Exception\CouldNotDeleteException;
 use Magento\Framework\Exception\CouldNotSaveException;
 use Magento\Framework\Exception\NoSuchEntityException;
@@ -16,6 +18,8 @@ use Magento\Framework\Reflection\DataObjectProcessor;
 use Magento\Cms\Model\ResourceModel\Page as ResourcePage;
 use Magento\Cms\Model\ResourceModel\Page\CollectionFactory as PageCollectionFactory;
 use Magento\Store\Model\StoreManagerInterface;
+use Magento\Framework\AuthorizationInterface;
+use Magento\Authorization\Model\UserContextInterface;
 
 /**
  * Class PageRepository
@@ -64,6 +68,21 @@ class PageRepository implements PageRepositoryInterface
     private $storeManager;
 
     /**
+     * @var CollectionProcessorInterface
+     */
+    private $collectionProcessor;
+
+    /**
+     * @var UserContextInterface
+     */
+    private $userContext;
+
+    /**
+     * @var AuthorizationInterface
+     */
+    private $authorization;
+
+    /**
      * @param ResourcePage $resource
      * @param PageFactory $pageFactory
      * @param Data\PageInterfaceFactory $dataPageFactory
@@ -72,6 +91,8 @@ class PageRepository implements PageRepositoryInterface
      * @param DataObjectHelper $dataObjectHelper
      * @param DataObjectProcessor $dataObjectProcessor
      * @param StoreManagerInterface $storeManager
+     * @param CollectionProcessorInterface $collectionProcessor
+     * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      */
     public function __construct(
         ResourcePage $resource,
@@ -81,7 +102,8 @@ class PageRepository implements PageRepositoryInterface
         Data\PageSearchResultsInterfaceFactory $searchResultsFactory,
         DataObjectHelper $dataObjectHelper,
         DataObjectProcessor $dataObjectProcessor,
-        StoreManagerInterface $storeManager
+        StoreManagerInterface $storeManager,
+        CollectionProcessorInterface $collectionProcessor = null
     ) {
         $this->resource = $resource;
         $this->pageFactory = $pageFactory;
@@ -91,28 +113,83 @@ class PageRepository implements PageRepositoryInterface
         $this->dataPageFactory = $dataPageFactory;
         $this->dataObjectProcessor = $dataObjectProcessor;
         $this->storeManager = $storeManager;
+        $this->collectionProcessor = $collectionProcessor ?: $this->getCollectionProcessor();
+    }
+
+    /**
+     * Get user context.
+     *
+     * @return UserContextInterface
+     */
+    private function getUserContext(): UserContextInterface
+    {
+        if (!$this->userContext) {
+            $this->userContext = ObjectManager::getInstance()->get(UserContextInterface::class);
+        }
+
+        return $this->userContext;
+    }
+
+    /**
+     * Get authorization service.
+     *
+     * @return AuthorizationInterface
+     */
+    private function getAuthorization(): AuthorizationInterface
+    {
+        if (!$this->authorization) {
+            $this->authorization = ObjectManager::getInstance()->get(AuthorizationInterface::class);
+        }
+
+        return $this->authorization;
     }
 
     /**
      * Save Page data
      *
-     * @param \Magento\Cms\Api\Data\PageInterface $page
+     * @param \Magento\Cms\Api\Data\PageInterface|Page $page
      * @return Page
      * @throws CouldNotSaveException
      */
     public function save(\Magento\Cms\Api\Data\PageInterface $page)
     {
-        if (empty($page->getStoreId())) {
+        if ($page->getStoreId() === null) {
             $storeId = $this->storeManager->getStore()->getId();
             $page->setStoreId($storeId);
         }
         try {
+            //Validate changing of design.
+            $userType = $this->getUserContext()->getUserType();
+            if ((
+                    $userType === UserContextInterface::USER_TYPE_ADMIN
+                    || $userType === UserContextInterface::USER_TYPE_INTEGRATION
+                )
+                && !$this->getAuthorization()->isAllowed('Magento_Cms::save_design')
+            ) {
+                if (!$page->getId()) {
+                    $page->setLayoutUpdateXml(null);
+                    $page->setPageLayout(null);
+                    $page->setCustomTheme(null);
+                    $page->setCustomLayoutUpdateXml(null);
+                    $page->setCustomThemeTo(null);
+                    $page->setCustomThemeFrom(null);
+                } else {
+                    $savedPage = $this->getById($page->getId());
+                    $page->setLayoutUpdateXml($savedPage->getLayoutUpdateXml());
+                    $page->setPageLayout($savedPage->getPageLayout());
+                    $page->setCustomTheme($savedPage->getCustomTheme());
+                    $page->setCustomLayoutUpdateXml($savedPage->getCustomLayoutUpdateXml());
+                    $page->setCustomThemeTo($savedPage->getCustomThemeTo());
+                    $page->setCustomThemeFrom($savedPage->getCustomThemeFrom());
+                }
+            }
+
             $this->resource->save($page);
         } catch (\Exception $exception) {
-            throw new CouldNotSaveException(__(
-                'Could not save the page: %1',
-                $exception->getMessage()
-            ));
+            throw new CouldNotSaveException(
+                __('Could not save the page: %1', $exception->getMessage()),
+                $exception
+            );
         }
         return $page;
     }
@@ -129,7 +206,7 @@ class PageRepository implements PageRepositoryInterface
         $page = $this->pageFactory->create();
         $page->load($pageId);
         if (!$page->getId()) {
-            throw new NoSuchEntityException(__('CMS Page with id "%1" does not exist.', $pageId));
+            throw new NoSuchEntityException(__('The CMS page with the "%1" ID doesn\'t exist.', $pageId));
         }
         return $page;
     }
@@ -140,52 +217,20 @@ class PageRepository implements PageRepositoryInterface
      * @SuppressWarnings(PHPMD.CyclomaticComplexity)
      * @SuppressWarnings(PHPMD.NPathComplexity)
      * @param \Magento\Framework\Api\SearchCriteriaInterface $criteria
-     * @return \Magento\Cms\Model\ResourceModel\Page\Collection
+     * @return \Magento\Cms\Api\Data\PageSearchResultsInterface
      */
     public function getList(\Magento\Framework\Api\SearchCriteriaInterface $criteria)
     {
+        /** @var \Magento\Cms\Model\ResourceModel\Page\Collection $collection */
+        $collection = $this->pageCollectionFactory->create();
+
+        $this->collectionProcessor->process($criteria, $collection);
+
+        /** @var Data\PageSearchResultsInterface $searchResults */
         $searchResults = $this->searchResultsFactory->create();
         $searchResults->setSearchCriteria($criteria);
-
-        $collection = $this->pageCollectionFactory->create();
-        foreach ($criteria->getFilterGroups() as $filterGroup) {
-            foreach ($filterGroup->getFilters() as $filter) {
-                if ($filter->getField() === 'store_id') {
-                    $collection->addStoreFilter($filter->getValue(), false);
-                    continue;
-                }
-                $condition = $filter->getConditionType() ?: 'eq';
-                $collection->addFieldToFilter($filter->getField(), [$condition => $filter->getValue()]);
-            }
-        }
+        $searchResults->setItems($collection->getItems());
         $searchResults->setTotalCount($collection->getSize());
-        $sortOrders = $criteria->getSortOrders();
-        if ($sortOrders) {
-            /** @var SortOrder $sortOrder */
-            foreach ($sortOrders as $sortOrder) {
-                $collection->addOrder(
-                    $sortOrder->getField(),
-                    ($sortOrder->getDirection() == SortOrder::SORT_ASC) ? 'ASC' : 'DESC'
-                );
-            }
-        }
-        $collection->setCurPage($criteria->getCurrentPage());
-        $collection->setPageSize($criteria->getPageSize());
-        $pages = [];
-        /** @var Page $pageModel */
-        foreach ($collection as $pageModel) {
-            $pageData = $this->dataPageFactory->create();
-            $this->dataObjectHelper->populateWithArray(
-                $pageData,
-                $pageModel->getData(),
-                'Magento\Cms\Api\Data\PageInterface'
-            );
-            $pages[] = $this->dataObjectProcessor->buildOutputDataArray(
-                $pageData,
-                'Magento\Cms\Api\Data\PageInterface'
-            );
-        }
-        $searchResults->setItems($pages);
         return $searchResults;
     }
 
@@ -201,10 +246,9 @@ class PageRepository implements PageRepositoryInterface
         try {
             $this->resource->delete($page);
         } catch (\Exception $exception) {
-            throw new CouldNotDeleteException(__(
-                'Could not delete the page: %1',
-                $exception->getMessage()
-            ));
+            throw new CouldNotDeleteException(
+                __('Could not delete the page: %1', $exception->getMessage())
+            );
         }
         return true;
     }
@@ -220,5 +264,21 @@ class PageRepository implements PageRepositoryInterface
     public function deleteById($pageId)
     {
         return $this->delete($this->getById($pageId));
+    }
+
+    /**
+     * Retrieve collection processor
+     *
+     * @deprecated 102.0.0
+     * @return CollectionProcessorInterface
+     */
+    private function getCollectionProcessor()
+    {
+        if (!$this->collectionProcessor) {
+            $this->collectionProcessor = \Magento\Framework\App\ObjectManager::getInstance()->get(
+                'Magento\Cms\Model\Api\SearchCriteria\PageCollectionProcessor'
+            );
+        }
+        return $this->collectionProcessor;
     }
 }

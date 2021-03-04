@@ -1,5 +1,6 @@
-[![Latest Stable Version](https://poser.pugx.org/sebastian/phpcpd/v/stable.png)](https://packagist.org/packages/sebastian/phpcpd)
-[![Build Status](https://travis-ci.org/sebastianbergmann/phpcpd.png?branch=master)](https://travis-ci.org/sebastianbergmann/phpcpd)
+[![Latest Stable Version](https://img.shields.io/packagist/v/sebastian/phpcpd.svg?style=flat-square)](https://packagist.org/packages/sebastian/phpcpd)
+[![Minimum PHP Version](https://img.shields.io/badge/php-%3E%3D%205.6-8892BF.svg?style=flat-square)](https://php.net/)
+[![Build Status](https://img.shields.io/travis/sebastianbergmann/phpcpd/master.svg?style=flat-square)](https://travis-ci.org/sebastianbergmann/phpcpd)
 
 # PHP Copy/Paste Detector (PHPCPD)
 
@@ -11,54 +12,39 @@
 
 The easiest way to obtain PHPCPD is to download a [PHP Archive (PHAR)](http://php.net/phar) that has all required dependencies of PHPCPD bundled in a single file:
 
-    wget https://phar.phpunit.de/phpcpd.phar
-    chmod +x phpcpd.phar
-    mv phpcpd.phar /usr/local/bin/phpcpd
+    $ wget https://phar.phpunit.de/phpcpd.phar
+    $ chmod +x phpcpd.phar
+    $ mv phpcpd.phar /usr/local/bin/phpcpd
 
 You can also immediately use the PHAR after you have downloaded it, of course:
 
-    wget https://phar.phpunit.de/phpcpd.phar
-    php phpcpd.phar
+    $ wget https://phar.phpunit.de/phpcpd.phar
+    $ php phpcpd.phar
 
 ### Composer
 
-Simply add a dependency on `sebastian/phpcpd` to your project's `composer.json` file if you use [Composer](http://getcomposer.org/) to manage the dependencies of your project. Here is a minimal example of a `composer.json` file that just defines a development-time dependency on PHPCPD:
+You can add this tool as a local, per-project, development-time dependency to your project using [Composer](https://getcomposer.org/):
 
-    {
-        "require-dev": {
-            "sebastian/phpcpd": "*"
-        }
-    }
+    $ composer require --dev sebastian/phpcpd
 
-For a system-wide installation via Composer, you can run:
-
-    composer global require 'sebastian/phpcpd=*'
-
-Make sure you have `~/.composer/vendor/bin/` in your path.
-
-### PEAR Installer
-
-The following two commands (which you may have to run as `root`) are all that is required to install PHPCPD using the PEAR Installer:
-
-    pear config-set auto_discover 1
-    pear install pear.phpunit.de/phpcpd
+You can then invoke it using the `vendor/bin/phpcpd` executable.
 
 ## Usage Example
 
-    ➜ ~ phpcpd /usr/local/src/phpunit/PHPUnit
-    phpcpd 1.4.1 by Sebastian Bergmann.
+    $ phpcpd wordpress-4.7.1
+    phpcpd 3.0.0 by Sebastian Bergmann.
 
-    Found 3 exact clones with 53 duplicated lines in 5 files:
+    Found 59 clones with 2548 duplicated lines in 39 files:
 
-      - /usr/local/src/phpunit/PHPUnit/Framework/Constraint/Or.php:136-157
-        /usr/local/src/phpunit/PHPUnit/Framework/Constraint/And.php:143-164
+      - /home/sb/wordpress-4.7.1/wp-admin/includes/class-ftp-pure.php:99-114
+        /home/sb/wordpress-4.7.1/wp-admin/includes/class-ftp-sockets.php:119-134
+      .
+      .
+      .
+      - /home/sb/wordpress-4.7.1/wp-includes/class-wp-customize-manager.php:277-329
+        /home/sb/wordpress-4.7.1/wp-includes/class-wp-customize-control.php:652-704
 
-      - /usr/local/src/phpunit/PHPUnit/Framework/Constraint/Or.php:136-157
-        /usr/local/src/phpunit/PHPUnit/Framework/Constraint/Xor.php:141-162
+    0.77% duplicated lines out of 332387 total lines of code.
 
-      - /usr/local/src/phpunit/PHPUnit/Framework/Comparator/Scalar.php:121-132
-        /usr/local/src/phpunit/PHPUnit/Framework/Comparator/Numeric.php:102-113
+    Time: 2.91 seconds, Memory: 232.00MB
 
-    0.19% duplicated lines out of 27640 total lines of code.
-
-    Time: 0 seconds, Memory: 18.25Mb

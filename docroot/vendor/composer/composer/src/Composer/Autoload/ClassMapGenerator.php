@@ -20,6 +20,7 @@ namespace Composer\Autoload;
 
 use Symfony\Component\Finder\Finder;
 use Composer\IO\IOInterface;
+use Composer\Util\Filesystem;
 
 /**
  * ClassMapGenerator
@@ -73,14 +74,27 @@ class ClassMapGenerator
         }
 
         $map = array();
+        $filesystem = new Filesystem();
+        $cwd = realpath(getcwd());
 
         foreach ($path as $file) {
-            $filePath = $file->getRealPath();
-
+            $filePath = $file->getPathname();
             if (!in_array(pathinfo($filePath, PATHINFO_EXTENSION), array('php', 'inc', 'hh'))) {
                 continue;
             }
 
+            if (!$filesystem->isAbsolutePath($filePath)) {
+                $filePath = $cwd . '/' . $filePath;
+                $filePath = $filesystem->normalizePath($filePath);
+            } else {
+                $filePath = preg_replace('{[\\\\/]{2,}}', '/', $filePath);
+            }
+
+            // check the realpath of the file against the blacklist as the path might be a symlink and the blacklist is realpath'd so symlink are resolved
+            if ($blacklist && preg_match($blacklist, strtr(realpath($filePath), '\\', '/'))) {
+                continue;
+            }
+            // check non-realpath of file for directories symlink in project dir
             if ($blacklist && preg_match($blacklist, strtr($filePath, '\\', '/'))) {
                 continue;
             }
@@ -148,7 +162,7 @@ class ClassMapGenerator
         }
 
         // strip heredocs/nowdocs
-        $contents = preg_replace('{<<<\s*(\'?)(\w+)\\1(?:\r\n|\n|\r)(?:.*?)(?:\r\n|\n|\r)\\2(?=\r\n|\n|\r|;)}s', 'null', $contents);
+        $contents = preg_replace('{<<<[ \t]*([\'"]?)(\w+)\\1(?:\r\n|\n|\r)(?:.*?)(?:\r\n|\n|\r)(?:\s*)\\2(?=\s+|[;,.)])}s', 'null', $contents);
         // strip strings
         $contents = preg_replace('{"[^"\\\\]*+(\\\\.[^"\\\\]*+)*+"|\'[^\'\\\\]*+(\\\\.[^\'\\\\]*+)*+\'}s', 'null', $contents);
         // strip leading non-php code if needed
@@ -159,11 +173,15 @@ class ClassMapGenerator
             }
         }
         // strip non-php blocks in the file
-        $contents = preg_replace('{\?>.+<\?}s', '?><?', $contents);
+        $contents = preg_replace('{\?>(?:[^<]++|<(?!\?))*+<\?}s', '?><?', $contents);
         // strip trailing non-php code if needed
         $pos = strrpos($contents, '?>');
         if (false !== $pos && false === strpos(substr($contents, $pos), '<?')) {
             $contents = substr($contents, 0, $pos);
+        }
+        // strip comments if short open tags are in the file
+        if (preg_match('{(<\?)(?!(php|hh))}i', $contents)) {
+            $contents = preg_replace('{//.* | /\*(?:[^*]++|\*(?!/))*\*/}x', '', $contents);
         }
 
         preg_match_all('{
@@ -181,6 +199,10 @@ class ClassMapGenerator
                 $namespace = str_replace(array(' ', "\t", "\r", "\n"), '', $matches['nsname'][$i]) . '\\';
             } else {
                 $name = $matches['name'][$i];
+                // skip anon classes extending/implementing
+                if ($name === 'extends' || $name === 'implements') {
+                    continue;
+                }
                 if ($name[0] === ':') {
                     // This is an XHP class, https://github.com/facebook/xhp
                     $name = 'xhp'.substr(str_replace(array('-', ':'), array('_', '__'), $name), 1);

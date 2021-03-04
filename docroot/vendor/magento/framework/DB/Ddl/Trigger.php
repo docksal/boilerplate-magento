@@ -1,10 +1,14 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\DB\Ddl;
 
+/**
+ * @api
+ * @since 100.0.2
+ */
 class Trigger
 {
     /**#@+
@@ -27,11 +31,7 @@ class Trigger
 
     /**#@-*/
 
-    /**
-     * List of times available for trigger
-     *
-     * @var array
-     */
+    /**#@-*/
     protected static $listOfTimes = [self::TIME_BEFORE, self::TIME_AFTER];
 
     /**
@@ -187,7 +187,7 @@ class Trigger
                 (string)new \Magento\Framework\Phrase('Trigger table name should be a string')
             );
         }
-        $this->tableName = strtolower($name);
+        $this->tableName = $name;
         return $this;
     }
 

@@ -1,13 +1,13 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+
 namespace Magento\Sales\Model;
 
 use Magento\Framework\Exception\ConfigurationMismatchException;
 use Magento\Framework\ObjectManagerInterface;
-use Magento\Framework\App\ObjectManager;
 
 /**
  * Class Validator
@@ -30,16 +30,14 @@ class Validator
      * Validator constructor.
      *
      * @param ObjectManagerInterface $objectManager
-     * @param ValidatorResultInterfaceFactory|null $validatorResult
+     * @param ValidatorResultInterfaceFactory $validatorResult
      */
     public function __construct(
         ObjectManagerInterface $objectManager,
-        ValidatorResultInterfaceFactory $validatorResult = null
+        ValidatorResultInterfaceFactory $validatorResult
     ) {
         $this->objectManager = $objectManager;
-        $this->validatorResultFactory = $validatorResult ?: ObjectManager::getInstance()->get(
-            ValidatorResultInterfaceFactory::class
-        );
+        $this->validatorResultFactory = $validatorResult;
     }
 
     /**
@@ -61,9 +59,7 @@ class Validator
             $validator = $this->objectManager->create($validatorName, $validatorArguments);
             if (!$validator instanceof ValidatorInterface) {
                 throw new ConfigurationMismatchException(
-                    __(
-                        sprintf('Validator %s is not instance of general validator interface', $validatorName)
-                    )
+                    __('The "%1" validator is not an instance of the general validator interface.', $validatorName)
                 );
             }
             $messages = array_merge($messages, $validator->validate($entity));

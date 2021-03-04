@@ -1,10 +1,8 @@
 <?php
 /**
- * Zend Framework (http://framework.zend.com/)
- *
- * @link      http://github.com/zendframework/zf2 for the canonical source repository
- * @copyright Copyright (c) 2005-2015 Zend Technologies USA Inc. (http://www.zend.com)
- * @license   http://framework.zend.com/license/new-bsd New BSD License
+ * @see       https://github.com/zendframework/zend-http for the canonical source repository
+ * @copyright Copyright (c) 2005-2017 Zend Technologies USA Inc. (http://www.zend.com)
+ * @license   https://github.com/zendframework/zend-http/blob/master/LICENSE.md New BSD License
  */
 
 namespace Zend\Http\Header;
@@ -25,7 +23,7 @@ class Allow implements HeaderInterface
      *
      * @var array
      */
-    protected $methods = array(
+    protected $methods = [
         Request::METHOD_OPTIONS => false,
         Request::METHOD_GET     => true,
         Request::METHOD_HEAD    => false,
@@ -35,13 +33,13 @@ class Allow implements HeaderInterface
         Request::METHOD_TRACE   => false,
         Request::METHOD_CONNECT => false,
         Request::METHOD_PATCH   => false,
-    );
+    ];
 
     /**
      * Create Allow header from header line
      *
      * @param string $headerLine
-     * @return Allow
+     * @return static
      * @throws Exception\InvalidArgumentException
      */
     public static function fromString($headerLine)
@@ -104,7 +102,7 @@ class Allow implements HeaderInterface
      * Allow methods or list of methods
      *
      * @param array|string $allowedMethods
-     * @return Allow
+     * @return $this
      */
     public function allowMethods($allowedMethods)
     {
@@ -126,7 +124,7 @@ class Allow implements HeaderInterface
      * Disallow methods or list of methods
      *
      * @param array|string $disallowedMethods
-     * @return Allow
+     * @return $this
      */
     public function disallowMethods($disallowedMethods)
     {
@@ -148,7 +146,7 @@ class Allow implements HeaderInterface
      * Convenience alias for @see disallowMethods()
      *
      * @param array|string $disallowedMethods
-     * @return Allow
+     * @return $this
      */
     public function denyMethods($disallowedMethods)
     {

@@ -1,16 +1,16 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Sales\Block\Adminhtml\Order\Create\Form;
 
 use Magento\Backend\Model\Session\Quote;
-use Magento\Directory\Model\CountryHandlerInterface;
 use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Data\Form\Element\AbstractElement;
 use Magento\Framework\Pricing\PriceCurrencyInterface;
-use Magento\Store\Model\ScopeInterface;
+use Magento\Customer\Api\Data\AddressInterface;
+use Magento\Eav\Model\AttributeDataFactory;
 
 /**
  * Order create address form
@@ -138,6 +138,7 @@ class Address extends \Magento\Sales\Block\Adminhtml\Order\Create\Form\AbstractF
         $this->searchCriteriaBuilder = $criteriaBuilder;
         $this->filterBuilder = $filterBuilder;
         $this->addressMapper = $addressMapper;
+        $this->backendQuoteSession = $sessionQuote;
         parent::__construct(
             $context,
             $sessionQuote,
@@ -192,17 +193,19 @@ class Address extends \Magento\Sales\Block\Adminhtml\Order\Create\Form\AbstractF
         $emptyAddressForm = $this->_customerFormFactory->create(
             'customer_address',
             'adminhtml_customer_address',
-            [\Magento\Customer\Api\Data\AddressInterface::COUNTRY_ID => $defaultCountryId]
+            [AddressInterface::COUNTRY_ID => $defaultCountryId]
         );
-        $data = [0 => $emptyAddressForm->outputData(\Magento\Eav\Model\AttributeDataFactory::OUTPUT_FORMAT_JSON)];
+        $data = [0 => $emptyAddressForm->outputData(AttributeDataFactory::OUTPUT_FORMAT_JSON)];
         foreach ($this->getAddressCollection() as $address) {
             $addressForm = $this->_customerFormFactory->create(
                 'customer_address',
                 'adminhtml_customer_address',
-                $this->addressMapper->toFlatArray($address)
+                $this->addressMapper->toFlatArray($address),
+                false,
+                false
             );
             $data[$address->getId()] = $addressForm->outputData(
-                \Magento\Eav\Model\AttributeDataFactory::OUTPUT_FORMAT_JSON
+                AttributeDataFactory::OUTPUT_FORMAT_JSON
             );
         }
 
@@ -219,6 +222,11 @@ class Address extends \Magento\Sales\Block\Adminhtml\Order\Create\Form\AbstractF
      */
     protected function _prepareForm()
     {
+        $storeId = $this->getCreateOrderModel()
+            ->getSession()
+            ->getStoreId();
+        $this->_storeManager->setCurrentStore($storeId);
+
         $fieldset = $this->_form->addFieldset('main', ['no_container' => true]);
 
         $addressForm = $this->_customerFormFactory->create('customer_address', 'adminhtml_customer_address');
@@ -277,14 +285,13 @@ class Address extends \Magento\Sales\Block\Adminhtml\Order\Create\Form\AbstractF
                 $this->directoryHelper->getDefaultCountry($this->getStore())
             );
         }
-
         $this->processCountryOptions($this->_form->getElement('country_id'));
         // Set custom renderer for VAT field if needed
         $vatIdElement = $this->_form->getElement('vat_id');
         if ($vatIdElement && $this->getDisplayVatValidationButton() !== false) {
             $vatIdElement->setRenderer(
                 $this->getLayout()->createBlock(
-                    'Magento\Customer\Block\Adminhtml\Sales\Order\Address\Form\Renderer\Vat'
+                    \Magento\Customer\Block\Adminhtml\Sales\Order\Address\Form\Renderer\Vat::class
                 )->setJsVariablePrefix(
                     $this->getJsVariablePrefix()
                 )
@@ -295,6 +302,8 @@ class Address extends \Magento\Sales\Block\Adminhtml\Order\Create\Form\AbstractF
     }
 
     /**
+     * Process country options.
+     *
      * @param \Magento\Framework\Data\Form\Element\AbstractElement $countryElement
      * @return void
      */
@@ -309,8 +318,9 @@ class Address extends \Magento\Sales\Block\Adminhtml\Order\Create\Form\AbstractF
     }
 
     /**
-     * Retrieve Directiry Countries collection
-     * @deprecated
+     * Retrieve Directory Countries collection
+     *
+     * @deprecated 100.1.3
      * @return \Magento\Directory\Model\ResourceModel\Country\Collection
      */
     private function getCountriesCollection()
@@ -325,7 +335,8 @@ class Address extends \Magento\Sales\Block\Adminhtml\Order\Create\Form\AbstractF
 
     /**
      * Retrieve Backend Quote Session
-     * @deprecated
+     *
+     * @deprecated 100.1.3
      * @return Quote
      */
     private function getBackendQuoteSession()

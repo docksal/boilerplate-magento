@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\Url;
@@ -9,6 +9,7 @@ namespace Magento\Framework\Url;
  * This ScopeResolverInterface adds the ability to get the Magento area the code is executing in.
  *
  * @api
+ * @since 100.0.2
  */
 interface ScopeResolverInterface extends \Magento\Framework\App\ScopeResolverInterface
 {

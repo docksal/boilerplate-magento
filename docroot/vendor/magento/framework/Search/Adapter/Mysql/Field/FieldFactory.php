@@ -1,12 +1,19 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
 namespace Magento\Framework\Search\Adapter\Mysql\Field;
 
-
+/**
+ * MySQL search field factory.
+ *
+ * @api
+ * @deprecated 102.0.0
+ * @see \Magento\ElasticSearch
+ * @since 100.0.2
+ */
 class FieldFactory
 {
     /**
@@ -31,7 +38,7 @@ class FieldFactory
      */
     public function __construct(
         \Magento\Framework\ObjectManagerInterface $objectManager,
-        $instanceName = 'Magento\Framework\Search\Adapter\Mysql\Field\FieldInterface'
+        $instanceName = \Magento\Framework\Search\Adapter\Mysql\Field\FieldInterface::class
     ) {
         $this->_objectManager = $objectManager;
         $this->_instanceName = $instanceName;

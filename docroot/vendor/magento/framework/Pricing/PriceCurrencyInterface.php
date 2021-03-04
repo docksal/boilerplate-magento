@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -10,6 +10,7 @@ namespace Magento\Framework\Pricing;
  * Interface PriceCurrencyInterface
  *
  * @api
+ * @since 100.0.2
  */
 interface PriceCurrencyInterface
 {
@@ -78,6 +79,7 @@ interface PriceCurrencyInterface
     /**
      * Round price
      *
+     * @deprecated 102.0.1
      * @param float $price
      * @return float
      */
@@ -93,6 +95,8 @@ interface PriceCurrencyInterface
     public function getCurrency($scope = null, $currency = null);
 
     /**
+     * Get currency symbol
+     *
      * @param null|string|bool|int|\Magento\Framework\App\ScopeInterface $scope
      * @param \Magento\Framework\Model\AbstractModel|string|null $currency
      * @return string

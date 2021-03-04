@@ -1,8 +1,10 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+declare(strict_types=1);
+
 namespace Magento\Catalog\Model\Product\Option;
 
 use Magento\Catalog\Api\ProductCustomOptionRepositoryInterface as OptionRepository;
@@ -20,7 +22,6 @@ class SaveHandler implements ExtensionInterface
 
     /**
      * @param OptionRepository $optionRepository
-     * @param MetadataPool $metadataPool
      */
     public function __construct(
         OptionRepository $optionRepository
@@ -29,6 +30,8 @@ class SaveHandler implements ExtensionInterface
     }
 
     /**
+     * Perform action on relation/extension attribute
+     *
      * @param object $entity
      * @param array $arguments
      * @return \Magento\Catalog\Api\Data\ProductInterface|object
@@ -36,15 +39,47 @@ class SaveHandler implements ExtensionInterface
      */
     public function execute($entity, $arguments = [])
     {
+        if ($entity->getOptionsSaved()) {
+            return $entity;
+        }
+
+        $options = $entity->getOptions();
+        $optionIds = [];
+
+        if ($options) {
+            $optionIds = array_map(function ($option) {
+                /** @var \Magento\Catalog\Model\Product\Option $option */
+                return $option->getOptionId();
+            }, $options);
+        }
+
         /** @var \Magento\Catalog\Api\Data\ProductInterface $entity */
         foreach ($this->optionRepository->getProductOptions($entity) as $option) {
-            $this->optionRepository->delete($option);
-        }
-        if ($entity->getOptions()) {
-            foreach ($entity->getOptions() as $option) {
-                $this->optionRepository->save($option);
+            if (!in_array($option->getOptionId(), $optionIds)) {
+                $this->optionRepository->delete($option);
             }
         }
+        if ($options) {
+            $this->processOptionsSaving($options, (bool)$entity->dataHasChangedFor('sku'), (string)$entity->getSku());
+        }
+
         return $entity;
+    }
+
+    /**
+     * Save custom options
+     *
+     * @param array $options
+     * @param bool $hasChangedSku
+     * @param string $newSku
+     */
+    private function processOptionsSaving(array $options, bool $hasChangedSku, string $newSku)
+    {
+        foreach ($options as $option) {
+            if ($hasChangedSku && $option->hasData('product_sku')) {
+                $option->setProductSku($newSku);
+            }
+            $this->optionRepository->save($option);
+        }
     }
 }

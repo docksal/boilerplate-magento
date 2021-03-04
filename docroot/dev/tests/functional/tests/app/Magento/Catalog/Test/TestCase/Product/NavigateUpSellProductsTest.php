@@ -1,10 +1,12 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
 namespace Magento\Catalog\Test\TestCase\Product;
+
+use Magento\Mtf\Fixture\InjectableFixture;
 
 /**
  * Preconditions:
@@ -15,14 +17,13 @@ namespace Magento\Catalog\Test\TestCase\Product;
  * 1. Navigate through up-sell products.
  *
  * @ZephyrId MAGETWO-12391
- * @group Up-sells_(MX)
+ * @group Up-sells
  */
 class NavigateUpSellProductsTest extends AbstractProductPromotedProductsTest
 {
     /* tags */
     const TEST_TYPE = 'acceptance_test, extended_acceptance_test';
     const MVP = 'yes';
-    const DOMAIN = 'MX';
     /* end tags */
 
     /**
@@ -74,7 +75,7 @@ class NavigateUpSellProductsTest extends AbstractProductPromotedProductsTest
      */
     protected function assertAbsentUpSellSection()
     {
-        \PHPUnit_Framework_Assert::assertFalse(
+        \PHPUnit\Framework\Assert::assertFalse(
             $this->catalogProductView->getUpsellBlock()->isVisible(),
             "Up-sell section is present."
         );
@@ -100,7 +101,7 @@ class NavigateUpSellProductsTest extends AbstractProductPromotedProductsTest
 
         sort($productNames);
         sort($pageProductNames);
-        \PHPUnit_Framework_Assert::assertEquals(
+        \PHPUnit\Framework\Assert::assertEquals(
             $productNames,
             $pageProductNames,
             'Wrong products are displayed in up-sell section.'

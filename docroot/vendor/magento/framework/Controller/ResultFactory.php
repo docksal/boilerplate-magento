@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -10,6 +10,9 @@ use Magento\Framework\ObjectManagerInterface;
 
 /**
  * Result Factory
+ *
+ * @api
+ * @since 100.0.2
  */
 class ResultFactory
 {
@@ -24,11 +27,7 @@ class ResultFactory
     const TYPE_PAGE     = 'page';
     /**#@-*/
 
-    /**
-     * Map of types which are references to classes
-     *
-     * @var array
-     */
+    /**#@-*/
     protected $typeMap = [
         self::TYPE_JSON     => Result\Json::class,
         self::TYPE_RAW      => Result\Raw::class,

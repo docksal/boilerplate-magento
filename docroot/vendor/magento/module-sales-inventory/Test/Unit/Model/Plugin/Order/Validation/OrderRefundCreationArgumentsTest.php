@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\SalesInventory\Test\Unit\Model\Plugin\Order\Validation;
@@ -13,12 +13,11 @@ use Magento\Sales\Api\Data\CreditmemoCreationArgumentsInterface;
 use Magento\Sales\Api\Data\CreditmemoCreationArgumentsExtensionInterface;
 use Magento\Sales\Api\Data\CreditmemoInterface;
 use Magento\Sales\Api\Data\OrderInterface;
-use Magento\Sales\Api\Data\CreditmemoCommentCreationInterface;
 
 /**
  * Class OrderRefundCreationArgumentsTest
  */
-class OrderRefundCreationArgumentsTest extends \PHPUnit_Framework_TestCase
+class OrderRefundCreationArgumentsTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var OrderRefundCreationArguments
@@ -60,11 +59,6 @@ class OrderRefundCreationArgumentsTest extends \PHPUnit_Framework_TestCase
      */
     private $creditmemoMock;
 
-    /**
-     * @var \Closure
-     */
-    private $proceed;
-
     protected function setUp()
     {
         $this->returnValidatorMock = $this->getMockBuilder(ReturnValidator::class)
@@ -78,7 +72,7 @@ class OrderRefundCreationArgumentsTest extends \PHPUnit_Framework_TestCase
         $this->extensionAttributesMock = $this->getMockBuilder(CreditmemoCreationArgumentsExtensionInterface::class)
             ->setMethods(['getReturnToStockItems'])
             ->disableOriginalConstructor()
-            ->getMock();
+            ->getMockForAbstractClass();
 
         $this->validateResultMock = $this->getMockBuilder(ValidatorResultInterface::class)
             ->disableOriginalConstructor()
@@ -96,17 +90,13 @@ class OrderRefundCreationArgumentsTest extends \PHPUnit_Framework_TestCase
             ->disableOriginalConstructor()
             ->getMock();
 
-        $this->proceed = function () {
-            return $this->validateResultMock;
-        };
-
         $this->plugin = new OrderRefundCreationArguments($this->returnValidatorMock);
     }
 
     /**
      * @dataProvider dataProvider
      */
-    public function testAroundValidation($errorMessage)
+    public function testAfterValidation($erroMessage)
     {
         $returnToStockItems = [1];
         $this->creditmemoCreationArgumentsMock->expects($this->exactly(3))
@@ -119,15 +109,15 @@ class OrderRefundCreationArgumentsTest extends \PHPUnit_Framework_TestCase
 
         $this->returnValidatorMock->expects($this->once())
             ->method('validate')
-            ->willReturn($errorMessage);
+            ->willReturn($erroMessage);
 
-        $this->validateResultMock->expects($errorMessage ? $this->once() : $this->never())
+        $this->validateResultMock->expects($erroMessage ? $this->once() : $this->never())
             ->method('addMessage')
-            ->with($errorMessage);
+            ->with($erroMessage);
 
-        $this->plugin->aroundValidate(
+        $this->plugin->afterValidate(
             $this->refundOrderValidatorMock,
-            $this->proceed,
+            $this->validateResultMock,
             $this->orderMock,
             $this->creditmemoMock,
             [],

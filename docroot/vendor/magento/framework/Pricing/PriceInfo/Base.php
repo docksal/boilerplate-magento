@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -15,6 +15,9 @@ use Magento\Framework\Pricing\PriceInfoInterface;
 /**
  * Class Base
  * Price info base model
+ *
+ * @api
+ * @since 100.0.2
  */
 class Base implements PriceInfoInterface
 {

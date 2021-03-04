@@ -1,8 +1,9 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+declare(strict_types=1);
 
 namespace Magento\Customer\Test\Unit\Controller\Section;
 
@@ -10,102 +11,176 @@ use Magento\Customer\Controller\Section\Load;
 use Magento\Customer\CustomerData\Section\Identifier;
 use Magento\Customer\CustomerData\SectionPoolInterface;
 use Magento\Framework\App\Action\Context;
-use Magento\Framework\App\RequestInterface;
 use Magento\Framework\Controller\Result\Json;
 use Magento\Framework\Controller\Result\JsonFactory;
 use Magento\Framework\Escaper;
-use Magento\Framework\ObjectManagerInterface;
-use PHPUnit_Framework_MockObject_MockObject;
+use \PHPUnit_Framework_MockObject_MockObject as MockObject;
+use Magento\Framework\App\Request\Http as HttpRequest;
 
-class LoadTest extends \PHPUnit_Framework_TestCase
+class LoadTest extends \PHPUnit\Framework\TestCase
 {
-    /** @var Load|PHPUnit_Framework_MockObject_MockObject */
-    private $actionMock;
-    /** @var Json|PHPUnit_Framework_MockObject_MockObject $jsonMock */
-    private $jsonMock;
+    /**
+     * @var Load
+     */
+    private $loadAction;
 
-    public function setUp()
+    /**
+     * @var Context|MockObject
+     */
+    private $contextMock;
+
+    /**
+     * @var JsonFactory|MockObject
+     */
+    private $resultJsonFactoryMock;
+
+    /**
+     * @var Identifier|MockObject
+     */
+    private $sectionIdentifierMock;
+
+    /**
+     * @var SectionPoolInterface|MockObject
+     */
+    private $sectionPoolMock;
+
+    /**
+     * @var \Magento\Framework\Escaper|MockObject
+     */
+    private $escaperMock;
+
+    /**
+     * @var Json|MockObject
+     */
+    private $resultJsonMock;
+
+    /**
+     * @var HttpRequest|MockObject
+     */
+    private $httpRequestMock;
+
+    protected function setUp()
     {
-        $this->jsonMock = $this->getMockBuilder(Json::class)
-            ->disableOriginalConstructor()
-            ->getMock();
+        $this->contextMock = $this->createMock(Context::class);
+        $this->resultJsonFactoryMock = $this->createMock(JsonFactory::class);
+        $this->sectionIdentifierMock = $this->createMock(Identifier::class);
+        $this->sectionPoolMock = $this->getMockForAbstractClass(SectionPoolInterface::class);
+        $this->escaperMock = $this->createMock(Escaper::class);
+        $this->httpRequestMock = $this->createMock(HttpRequest::class);
+        $this->resultJsonMock = $this->createMock(Json::class);
 
-        /** @var JsonFactory|PHPUnit_Framework_MockObject_MockObject */
-        $jsonFactoryMock = $this->getMockBuilder(JsonFactory::class)
-            ->disableOriginalConstructor()
-            ->getMock();
-        $jsonFactoryMock->expects($this->once())->method('create')->willReturn($this->jsonMock);
+        $this->contextMock->expects($this->once())
+            ->method('getRequest')
+            ->willReturn($this->httpRequestMock);
 
-        $this->actionMock = $this->getMockBuilder(Load::class)
-            ->setConstructorArgs(
-                [
-                    $this->mockContext(),
-                    $jsonFactoryMock,
-                    $this->getMockBuilder(Identifier::class)->disableOriginalConstructor()->getMock(),
-                    $this->getMockBuilder(SectionPoolInterface::class)->disableOriginalConstructor()->getMock()
-                ]
-            )
-            ->setMethods(["getRequest"])
-            ->getMock();
+        $this->loadAction = new Load(
+            $this->contextMock,
+            $this->resultJsonFactoryMock,
+            $this->sectionIdentifierMock,
+            $this->sectionPoolMock,
+            $this->escaperMock
+        );
     }
 
     /**
-     * Test escaped response
-     *
-     * @dataProvider provideMessages
-     *
-     * @param string $message
-     * @param string $expectedMessage
+     * @param string $sectionNames
+     * @param bool $forceNewSectionTimestamp
+     * @param string[] $sectionNamesAsArray
+     * @param bool $forceNewTimestamp
+     * @dataProvider executeDataProvider
      */
-    public function testEscapedResponse($message, $expectedMessage)
+    public function testExecute($sectionNames, $forceNewSectionTimestamp, $sectionNamesAsArray, $forceNewTimestamp)
     {
-        $this->jsonMock->expects($this->once())
+        $this->resultJsonFactoryMock->expects($this->once())
+            ->method('create')
+            ->willReturn($this->resultJsonMock);
+        $this->resultJsonMock->expects($this->exactly(2))
+            ->method('setHeader')
+            ->withConsecutive(
+                ['Cache-Control', 'max-age=0, must-revalidate, no-cache, no-store'],
+                ['Pragma', 'no-cache']
+            );
+
+        $this->httpRequestMock->expects($this->exactly(2))
+            ->method('getParam')
+            ->withConsecutive(['sections'], ['force_new_section_timestamp'])
+            ->willReturnOnConsecutiveCalls($sectionNames, $forceNewSectionTimestamp);
+
+        $this->sectionPoolMock->expects($this->once())
+            ->method('getSectionsData')
+            ->with($sectionNamesAsArray, $forceNewTimestamp)
+            ->willReturn([
+                'message' => 'some message',
+                'someKey' => 'someValue'
+            ]);
+
+        $this->resultJsonMock->expects($this->once())
             ->method('setData')
-            ->with(['message' => $expectedMessage])
-            ->willReturnSelf();
+            ->with([
+                'message' => 'some message',
+                'someKey' => 'someValue'
+            ])
+            ->willReturn($this->resultJsonMock);
 
-        /** @var RequestInterface|PHPUnit_Framework_MockObject_MockObject $request */
-        $request = $this->getMockBuilder(RequestInterface::class)
-            ->disableOriginalConstructor()
-            ->getMock();
-
-        $request->expects($this->once())->method("getParam")->willThrowException(new \Exception($message));
-
-        $this->actionMock->expects($this->once())->method('getRequest')->willReturn($request);
-        $this->actionMock->execute();
+        $this->loadAction->execute();
     }
 
     /**
      * @return array
      */
-    public function provideMessages()
+    public function executeDataProvider()
     {
         return [
-            ["test", "test"],
-            ["test<script>", "test&lt;script&gt;"],
-            ["test<script>alert()</script>", "test&lt;script&gt;alert()&lt;/script&gt;"],
+            [
+                'sectionNames' => 'sectionName1,sectionName2,sectionName3',
+                'forceNewSectionTimestamp' => 'forceNewSectionTimestamp',
+                'sectionNamesAsArray' => ['sectionName1', 'sectionName2', 'sectionName3'],
+                'forceNewTimestamp' => true
+            ],
+            [
+                'sectionNames' => null,
+                'forceNewSectionTimestamp' => null,
+                'sectionNamesAsArray' => null,
+                'forceNewTimestamp' => false
+            ],
         ];
     }
 
-    /**
-     * @return Context|PHPUnit_Framework_MockObject_MockObject
-     */
-    public function mockContext()
+    public function testExecuteWithThrowException()
     {
-        /** @var Context|PHPUnit_Framework_MockObject_MockObject $contextMock */
-        $contextMock = $this->getMockBuilder(Context::class)
-            ->disableOriginalConstructor()
-            ->getMock();
+        $this->resultJsonFactoryMock->expects($this->once())
+            ->method('create')
+            ->willReturn($this->resultJsonMock);
+        $this->resultJsonMock->expects($this->exactly(2))
+            ->method('setHeader')
+            ->withConsecutive(
+                ['Cache-Control', 'max-age=0, must-revalidate, no-cache, no-store'],
+                ['Pragma', 'no-cache']
+            );
 
-        $objectManagerMock = $this->getMockBuilder(ObjectManagerInterface::class)
-            ->getMock();
+        $this->httpRequestMock->expects($this->once())
+            ->method('getParam')
+            ->with('sections')
+            ->willThrowException(new \Exception('Some Message'));
 
-        $objectManagerMock->expects($this->once())
-            ->method('get')
-            ->with(Escaper::class)
-            ->willReturn(new Escaper());
+        $this->resultJsonMock->expects($this->once())
+            ->method('setStatusHeader')
+            ->with(
+                \Zend\Http\Response::STATUS_CODE_400,
+                \Zend\Http\AbstractMessage::VERSION_11,
+                'Bad Request'
+            );
 
-        $contextMock->expects($this->once())->method('getObjectManager')->willReturn($objectManagerMock);
-        return $contextMock;
+        $this->escaperMock->expects($this->once())
+            ->method('escapeHtml')
+            ->with('Some Message')
+            ->willReturn('Some Message');
+
+        $this->resultJsonMock->expects($this->once())
+            ->method('setData')
+            ->with(['message' => 'Some Message'])
+            ->willReturn($this->resultJsonMock);
+
+        $this->loadAction->execute();
     }
 }

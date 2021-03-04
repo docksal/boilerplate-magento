@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\Stdlib\Cookie;
@@ -13,6 +13,9 @@ use Magento\Framework\Exception\LocalizedException;
  *
  * Limits can include the amount of data stored in an individual cookie as well as the number of cookies
  * set for the domain.
+ *
+ * @api
+ * @since 100.0.2
  */
 class CookieSizeLimitReachedException extends LocalizedException
 {

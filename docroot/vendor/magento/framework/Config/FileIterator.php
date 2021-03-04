@@ -1,7 +1,7 @@
 <?php
 /**
  *
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\Config;
@@ -11,6 +11,8 @@ use Magento\Framework\Filesystem\File\ReadFactory;
 
 /**
  * Class FileIterator
+ * @api
+ * @since 100.0.2
  */
 class FileIterator implements \Iterator, \Countable
 {
@@ -65,7 +67,6 @@ class FileIterator implements \Iterator, \Countable
      */
     public function current()
     {
-        /** @var \Magento\Framework\Filesystem\File\Read $fileRead */
         $fileRead = $this->fileReadFactory->create($this->key(), DriverPool::FILE);
         return $fileRead->readAll();
     }

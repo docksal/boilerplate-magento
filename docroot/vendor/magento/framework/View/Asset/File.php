@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -10,6 +10,9 @@ namespace Magento\Framework\View\Asset;
  * A locally available static view file asset that can be referred with a file path
  *
  * This class is a value object with lazy loading of some of its data (content, physical file path)
+ *
+ * @api
+ * @since 100.0.2
  */
 class File implements MergeableInterface
 {
@@ -47,6 +50,11 @@ class File implements MergeableInterface
      * @var Minification
      */
     private $minification;
+
+    /**
+     * @var string
+     */
+    private $sourceContentType;
 
     /**
      * @param Source $source
@@ -153,6 +161,20 @@ class File implements MergeableInterface
             }
         }
         return $this->resolvedFile;
+    }
+
+    /**
+     * Get source content type
+     *
+     * @return string
+     * @since 101.0.0
+     */
+    public function getSourceContentType()
+    {
+        if ($this->sourceContentType === null) {
+            $this->sourceContentType = $this->source->getSourceContentType($this);
+        }
+        return $this->sourceContentType;
     }
 
     /**

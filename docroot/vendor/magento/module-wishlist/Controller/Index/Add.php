@@ -1,21 +1,24 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Wishlist\Controller\Index;
 
 use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Framework\App\Action;
+use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\Data\Form\FormKey\Validator;
 use Magento\Framework\Exception\NotFoundException;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\Controller\ResultFactory;
 
 /**
+ * Wish list Add controller
+ *
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  */
-class Add extends \Magento\Wishlist\Controller\AbstractIndex
+class Add extends \Magento\Wishlist\Controller\AbstractIndex implements HttpPostActionInterface
 {
     /**
      * @var \Magento\Wishlist\Controller\WishlistProviderInterface
@@ -114,8 +117,9 @@ class Add extends \Magento\Wishlist\Controller\AbstractIndex
             if (is_string($result)) {
                 throw new \Magento\Framework\Exception\LocalizedException(__($result));
             }
-            $wishlist->save();
-
+            if ($wishlist->isObjectNew()) {
+                $wishlist->save();
+            }
             $this->_eventManager->dispatch(
                 'wishlist_add_product',
                 ['wishlist' => $wishlist, 'product' => $product, 'item' => $result]
@@ -128,7 +132,7 @@ class Add extends \Magento\Wishlist\Controller\AbstractIndex
                 $referer = $this->_redirect->getRefererUrl();
             }
 
-            $this->_objectManager->get('Magento\Wishlist\Helper\Data')->calculate();
+            $this->_objectManager->get(\Magento\Wishlist\Helper\Data::class)->calculate();
 
             $this->messageManager->addComplexSuccessMessage(
                 'addProductSuccessMessage',
@@ -137,6 +141,7 @@ class Add extends \Magento\Wishlist\Controller\AbstractIndex
                     'referer' => $referer
                 ]
             );
+            // phpcs:disable Magento2.Exceptions.ThrowCatch
         } catch (\Magento\Framework\Exception\LocalizedException $e) {
             $this->messageManager->addErrorMessage(
                 __('We can\'t add the item to Wish List right now: %1.', $e->getMessage())

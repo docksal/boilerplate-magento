@@ -42,16 +42,16 @@ abstract class AbstractValidator implements
      */
     protected static $messageLength = -1;
 
-    protected $abstractOptions = array(
-        'messages'             => array(), // Array of validation failure messages
-        'messageTemplates'     => array(), // Array of validation failure message templates
-        'messageVariables'     => array(), // Array of additional variables available for validation failure messages
+    protected $abstractOptions = [
+        'messages'             => [], // Array of validation failure messages
+        'messageTemplates'     => [], // Array of validation failure message templates
+        'messageVariables'     => [], // Array of additional variables available for validation failure messages
         'translator'           => null,    // Translation object to used -> Translator\TranslatorInterface
         'translatorTextDomain' => null,    // Translation text domain
         'translatorEnabled'    => true,    // Is translation enabled?
         'valueObscured'        => false,   // Flag indicating whether or not value should be obfuscated
                                            // in error messages
-    );
+    ];
 
     /**
      * Abstract constructor for all validators
@@ -124,18 +124,18 @@ abstract class AbstractValidator implements
      * @throws Exception\InvalidArgumentException If $options is not an array or Traversable
      * @return AbstractValidator Provides fluid interface
      */
-    public function setOptions($options = array())
+    public function setOptions($options = [])
     {
-        if (!is_array($options) && !$options instanceof Traversable) {
+        if (! is_array($options) && ! $options instanceof Traversable) {
             throw new Exception\InvalidArgumentException(__METHOD__ . ' expects an array or Traversable');
         }
 
         foreach ($options as $name => $option) {
             $fname = 'set' . ucfirst($name);
             $fname2 = 'is' . ucfirst($name);
-            if (($name != 'setOptions') && method_exists($this, $name)) {
+            if (($name !== 'setOptions') && method_exists($this, $name)) {
                 $this->{$name}($option);
-            } elseif (($fname != 'setOptions') && method_exists($this, $fname)) {
+            } elseif (($fname !== 'setOptions') && method_exists($this, $fname)) {
                 $this->{$fname}($option);
             } elseif (method_exists($this, $fname2)) {
                 $this->{$fname2}($option);
@@ -208,7 +208,7 @@ abstract class AbstractValidator implements
             return $this;
         }
 
-        if (!isset($this->abstractOptions['messageTemplates'][$messageKey])) {
+        if (! isset($this->abstractOptions['messageTemplates'][$messageKey])) {
             throw new Exception\InvalidArgumentException("No message template exists for key '$messageKey'");
         }
 
@@ -278,7 +278,7 @@ abstract class AbstractValidator implements
      */
     protected function createMessage($messageKey, $value)
     {
-        if (!isset($this->abstractOptions['messageTemplates'][$messageKey])) {
+        if (! isset($this->abstractOptions['messageTemplates'][$messageKey])) {
             return;
         }
 
@@ -287,7 +287,7 @@ abstract class AbstractValidator implements
         $message = $this->translateMessage($messageKey, $message);
 
         if (is_object($value) &&
-            !in_array('__toString', get_class_methods($value))
+            ! in_array('__toString', get_class_methods($value))
         ) {
             $value = get_class($value) . ' object';
         } elseif (is_array($value)) {
@@ -359,7 +359,7 @@ abstract class AbstractValidator implements
     protected function setValue($value)
     {
         $this->value               = $value;
-        $this->abstractOptions['messages'] = array();
+        $this->abstractOptions['messages'] = [];
     }
 
     /**
@@ -565,7 +565,7 @@ abstract class AbstractValidator implements
     protected function translateMessage($messageKey, $message)
     {
         $translator = $this->getTranslator();
-        if (!$translator) {
+        if (! $translator) {
             return $message;
         }
 

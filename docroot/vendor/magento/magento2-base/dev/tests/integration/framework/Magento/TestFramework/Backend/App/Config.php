@@ -2,13 +2,12 @@
 /**
  * Default application path for backend area
  *
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
-// @codingStandardsIgnoreFile
-
 namespace Magento\TestFramework\Backend\App;
+
 use Magento\Framework\App\Config\ScopeConfigInterface;
 
 /**
@@ -26,12 +25,11 @@ class Config extends \Magento\Backend\App\Config
      * @param \Magento\TestFramework\App\Config $appConfig
      * @param \Magento\TestFramework\App\MutableScopeConfig $mutableScopeConfig
      */
-    public function __construct(\Magento\TestFramework\App\Config $appConfig, \Magento\TestFramework\App\MutableScopeConfig $mutableScopeConfig)
-    {
-        parent::__construct(
-            \Magento\TestFramework\ObjectManager::getInstance()->get(\Magento\Framework\App\Config\ScopePool::class),
-            $appConfig
-        );
+    public function __construct(
+        \Magento\TestFramework\App\Config $appConfig,
+        \Magento\TestFramework\App\MutableScopeConfig $mutableScopeConfig
+    ) {
+        parent::__construct($appConfig);
         $this->mutableScopeConfig = $mutableScopeConfig;
     }
 

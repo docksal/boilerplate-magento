@@ -50,7 +50,7 @@ abstract class Console
 
         if ($forceAdapter !== null) {
             // Use the supplied adapter class
-            if (substr($forceAdapter, 0, 1) == '\\') {
+            if (0 === strpos($forceAdapter, '\\')) {
                 $className = $forceAdapter;
             } elseif (stristr($forceAdapter, '\\')) {
                 $className = __NAMESPACE__ . '\\' . ltrim($forceAdapter, '\\');
@@ -58,7 +58,7 @@ abstract class Console
                 $className = __NAMESPACE__ . '\\Adapter\\' . $forceAdapter;
             }
 
-            if (!class_exists($className)) {
+            if (! class_exists($className)) {
                 throw new Exception\InvalidArgumentException(sprintf(
                     'Cannot find Console adapter class "%s"',
                     $className
@@ -69,7 +69,7 @@ abstract class Console
             $className = static::detectBestAdapter();
 
             // Check if we were able to detect console adapter
-            if (!$className) {
+            if (! $className) {
                 throw new Exception\RuntimeException('Cannot create Console adapter - am I running in a console?');
             }
         }
@@ -79,15 +79,15 @@ abstract class Console
 
         // Try to use the supplied charset class
         if ($forceCharset !== null) {
-            if (substr($forceCharset, 0, 1) == '\\') {
+            if (0 === strpos($forceCharset, '\\')) {
                 $className = $forceCharset;
-            } elseif (stristr($forceAdapter, '\\')) {
+            } elseif (false !== stripos($forceAdapter, '\\')) {
                 $className = __NAMESPACE__ . '\\' . ltrim($forceCharset, '\\');
             } else {
                 $className = __NAMESPACE__ . '\\Charset\\' . $forceCharset;
             }
 
-            if (!class_exists($className)) {
+            if (! class_exists($className)) {
                 throw new Exception\InvalidArgumentException(sprintf(
                     'Cannot find Charset class "%s"',
                     $className
@@ -169,7 +169,7 @@ abstract class Console
     public static function detectBestAdapter()
     {
         // Check if we are in a console environment
-        if (!static::isConsole()) {
+        if (! static::isConsole()) {
             return;
         }
 
@@ -199,6 +199,6 @@ abstract class Console
     public static function __callStatic($funcName, $arguments)
     {
         $instance = static::getInstance();
-        return call_user_func_array(array($instance, $funcName), $arguments);
+        return call_user_func_array([$instance, $funcName], $arguments);
     }
 }

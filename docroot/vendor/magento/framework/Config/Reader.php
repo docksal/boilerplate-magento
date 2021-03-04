@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\Config;
@@ -63,10 +63,7 @@ class Reader implements \Magento\Framework\App\Config\Scope\ReaderInterface
         uasort(
             $array,
             function ($firstItem, $nexItem) {
-                if ((int)$firstItem['sortOrder'] == (int)$nexItem['sortOrder']) {
-                    return 0;
-                }
-                return (int)$firstItem['sortOrder'] < (int)$nexItem['sortOrder'] ? -1 : 1;
+                return (int)$firstItem['sortOrder'] <=> (int)$nexItem['sortOrder'];
             }
         );
 

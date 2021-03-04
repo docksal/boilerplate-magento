@@ -34,6 +34,8 @@ class JsonFile
     const JSON_PRETTY_PRINT = 128;
     const JSON_UNESCAPED_UNICODE = 256;
 
+    const COMPOSER_SCHEMA_PATH = '/../../../res/composer-schema.json';
+
     private $path;
     private $rfs;
     private $io;
@@ -43,6 +45,7 @@ class JsonFile
      *
      * @param  string                    $path path to a lockfile
      * @param  RemoteFilesystem          $rfs  required for loading http/https json files
+     * @param  IOInterface               $io
      * @throws \InvalidArgumentException
      */
     public function __construct($path, RemoteFilesystem $rfs = null, IOInterface $io = null)
@@ -103,9 +106,9 @@ class JsonFile
     /**
      * Writes json file.
      *
-     * @param  array                     $hash    writes hash into json file
-     * @param  int                       $options json_encode options (defaults to JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
-     * @throws \UnexpectedValueException
+     * @param  array                                $hash    writes hash into json file
+     * @param  int                                  $options json_encode options (defaults to JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+     * @throws \UnexpectedValueException|\Exception
      */
     public function write(array $hash, $options = 448)
     {
@@ -143,10 +146,11 @@ class JsonFile
      * Validates the schema of the current json file according to composer-schema.json rules
      *
      * @param  int                     $schema a JsonFile::*_SCHEMA constant
+     * @param  string|null             $schemaFile a path to the schema file
      * @throws JsonValidationException
      * @return bool                    true on success
      */
-    public function validateSchema($schema = self::STRICT_SCHEMA)
+    public function validateSchema($schema = self::STRICT_SCHEMA, $schemaFile = null)
     {
         $content = file_get_contents($this->path);
         $data = json_decode($content);
@@ -155,8 +159,16 @@ class JsonFile
             self::validateSyntax($content, $this->path);
         }
 
-        $schemaFile = __DIR__ . '/../../../res/composer-schema.json';
-        $schemaData = json_decode(file_get_contents($schemaFile));
+        if (null === $schemaFile) {
+            $schemaFile = __DIR__ . self::COMPOSER_SCHEMA_PATH;
+        }
+
+        // Prepend with file:// only when not using a special schema already (e.g. in the phar)
+        if (false === strpos($schemaFile, '://')) {
+            $schemaFile = 'file://' . $schemaFile;
+        }
+
+        $schemaData = (object) array('$ref' => $schemaFile);
 
         if ($schema === self::LAX_SCHEMA) {
             $schemaData->additionalProperties = true;
@@ -216,9 +228,7 @@ class JsonFile
             return $json;
         }
 
-        $result = JsonFormatter::format($json, $unescapeUnicode, $unescapeSlashes);
-
-        return $result;
+        return JsonFormatter::format($json, $unescapeUnicode, $unescapeSlashes);
     }
 
     /**
@@ -276,7 +286,6 @@ class JsonFile
      * @param  string                    $json
      * @param  string                    $file
      * @throws \UnexpectedValueException
-     * @throws JsonValidationException
      * @throws ParsingException
      * @return bool                      true on success
      */

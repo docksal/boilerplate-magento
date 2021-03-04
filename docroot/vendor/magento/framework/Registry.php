@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework;
@@ -8,7 +8,12 @@ namespace Magento\Framework;
 /**
  * Registry model. Used to manage values in registry
  *
+ * Registry usage as a shared service introduces temporal, hard to detect coupling into system.
+ * It's usage should be avoid. Use service classes or data providers instead.
+ *
  * @api
+ * @deprecated 102.0.0
+ * @since 100.0.2
  */
 class Registry
 {
@@ -24,6 +29,8 @@ class Registry
      *
      * @param string $key
      * @return mixed
+     *
+     * @deprecated 102.0.0
      */
     public function registry($key)
     {
@@ -41,6 +48,8 @@ class Registry
      * @param bool $graceful
      * @return void
      * @throws \RuntimeException
+     *
+     * @deprecated 102.0.0
      */
     public function register($key, $value, $graceful = false)
     {
@@ -58,6 +67,8 @@ class Registry
      *
      * @param string $key
      * @return void
+     *
+     * @deprecated 102.0.0
      */
     public function unregister($key)
     {

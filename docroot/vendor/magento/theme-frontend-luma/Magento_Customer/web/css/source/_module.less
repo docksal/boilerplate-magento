@@ -1,5 +1,5 @@
 // /**
-//  * Copyright © 2016 Magento. All rights reserved.
+//  * Copyright © Magento, Inc. All rights reserved.
 //  * See COPYING.txt for license details.
 //  */
 
@@ -70,7 +70,7 @@
     }
 
     .form-address-edit {
-        #region_id {
+        .region_id {
             display: none;
         }
 
@@ -93,10 +93,36 @@
                 }
             }
         }
+        .fieldset.create.account {
+            .lib-form-hasrequired(bottom);
+            &:after {
+                margin-top: 35px;
+            }
+        }
+    }
+
+    .form.password.forget {
+        .fieldset {
+            .lib-form-hasrequired(bottom);
+            &:after {
+                margin-top: 35px;
+            }
+        }
+    }
+
+    //  Full name fieldset
+    .fieldset {
+        .fullname {
+            > .label {
+                &:extend(.abs-visually-hidden all);
+            }
+        }
     }
 
     .box-billing-address,
     .box-shipping-address,
+    .box-address-billing,
+    .box-address-shipping,
     .box-information,
     .box-newsletter {
         .box-content {
@@ -135,6 +161,7 @@
         .table-wrapper {
             .lib-css(margin-bottom, @indent__base);
             border-bottom: 1px solid @account-table-border-bottom-color;
+            overflow-x: auto;
 
             &:last-child {
                 margin-bottom: 0;
@@ -173,7 +200,7 @@
 
     //  Checkout address (create shipping address)
     .field.street {
-        .field.additional {
+        .field {
             .label {
                 &:extend(.abs-visually-hidden all);
             }
@@ -198,7 +225,7 @@
                 .column.main & {
                 }
             }
-
+            display: block;
             margin-bottom: @indent__s;
         }
 
@@ -232,6 +259,7 @@
 
             .input-text {
                 .lib-vendor-prefix-order(0);
+                z-index: 2;
             }
         }
     }
@@ -253,35 +281,35 @@
             z-index: -1;
         }
 
-        .password-strength-meter-0 & {
+        .password-none & {
             &:before {
                 background-color: @_password-default;
                 width: 100%;
             }
         }
 
-        .password-strength-meter-1 & {
+        .password-weak & {
             &:before {
                 background-color: @_password-weak;
                 width: 25%;
             }
         }
 
-        .password-strength-meter-2 & {
+        .password-medium & {
             &:before {
                 background-color: @_password-medium;
                 width: 50%;
             }
         }
 
-        .password-strength-meter-3 & {
+        .password-strong & {
             &:before {
                 background-color: @_password-strong;
                 width: 75%;
             }
         }
 
-        .password-strength-meter-4 & {
+        .password-very-strong & {
             &:before {
                 background-color: @_password-very-strong;
                 width: 100%;
@@ -307,8 +335,17 @@
         }
     }
 
-    .order-products-toolbar {
+    .order-products-toolbar,
+    .customer-addresses-toolbar {
         position: relative;
+
+        .toolbar-amount {
+            position: relative;
+            text-align: center;
+        }
+        .pages {
+            position: relative;
+        }
     }
 }
 
@@ -339,7 +376,7 @@
         .fieldset {
             > .field {
                 > .control {
-                    width: 55%;
+                    width: 80%;
                 }
             }
         }
@@ -348,9 +385,15 @@
     .form-create-account {
         .fieldset-fullname {
             .fields {
+                display: table;
+                width: 100%;
+
                 .field {
-                    float: left;
-                    margin: 0 @indent__s @indent__s 0;
+                    display: table-cell;
+
+                    + .field {
+                        padding-left: @indent__s;
+                    }
                 }
             }
 
@@ -364,7 +407,9 @@
     .form.password.reset,
     .form.send.confirmation,
     .form.password.forget,
-    .form.create.account {
+    .form.create.account,
+    .form.search.advanced,
+    .form.form-orders-search {
         min-width: 600px;
         width: 50%;
     }
@@ -378,6 +423,12 @@
 
         .column.main {
             width: 77.7%;
+        }
+
+        .sidebar-main {
+            .block {
+                margin-bottom: 0;
+            }
         }
     }
 
@@ -416,14 +467,22 @@
     .block-addresses-list {
         .items.addresses {
             &:extend(.abs-add-clearfix-desktop all);
+            font-size: 0;
 
             > .item {
-                &:extend(.abs-blocks-2columns all);
+                display: inline-block;
+                font-size: @font-size__base;
                 margin-bottom: @indent__base;
+                vertical-align: top;
+                width: 48%;
 
                 &:nth-last-child(1),
                 &:nth-last-child(2) {
                     margin-bottom: 0;
+                }
+
+                &:nth-child(even) {
+                    margin-left: 4%;
                 }
             }
         }
@@ -440,7 +499,7 @@
     }
 
     .form-address-edit {
-        .fieldset {
+        > .fieldset {
             &:extend(.abs-blocks-2columns all);
         }
     }
@@ -458,6 +517,8 @@
 
     .box-billing-address,
     .box-shipping-address,
+    .box-address-billing,
+    .box-address-shipping,
     .box-information {
         .box-content {
             &:extend(.abs-account-block-font-size all);
@@ -480,10 +541,17 @@
         .column.main,
         .sidebar-additional {
             margin: 0;
+            padding: 0;
         }
 
         .data.table {
             &:extend(.abs-table-striped-mobile all);
+        }
+
+        .sidebar-main {
+            .account-nav {
+                margin-bottom: 0;
+            }
         }
     }
 }
@@ -502,8 +570,8 @@
     }
 
     .account {
-        .page.messages {
-            margin-bottom: @indent__xl;
+        .messages {
+            margin-bottom: 0;
         }
 
         .column.main {
@@ -539,6 +607,17 @@
     .customer-account-index {
         .page-title-wrapper {
             position: relative;
+        }
+    }
+
+    .form.search.advanced {
+        .field.price {
+            .with-addon {
+                .input-text {
+                    flex-basis: auto;
+                    width: 100%;
+                }
+            }
         }
     }
 }

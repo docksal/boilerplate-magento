@@ -17,8 +17,10 @@ namespace Symfony\Component\Config\Resource;
  * The resource can be a file or a directory.
  *
  * @author Fabien Potencier <fabien@symfony.com>
+ *
+ * @final since Symfony 4.3
  */
-class FileResource implements SelfCheckingResourceInterface, \Serializable
+class FileResource implements SelfCheckingResourceInterface
 {
     /**
      * @var string|false
@@ -26,13 +28,17 @@ class FileResource implements SelfCheckingResourceInterface, \Serializable
     private $resource;
 
     /**
-     * Constructor.
-     *
      * @param string $resource The file path to the resource
+     *
+     * @throws \InvalidArgumentException
      */
-    public function __construct($resource)
+    public function __construct(string $resource)
     {
         $this->resource = realpath($resource) ?: (file_exists($resource) ? $resource : false);
+
+        if (false === $this->resource) {
+            throw new \InvalidArgumentException(sprintf('The file "%s" does not exist.', $resource));
+        }
     }
 
     /**
@@ -40,11 +46,11 @@ class FileResource implements SelfCheckingResourceInterface, \Serializable
      */
     public function __toString()
     {
-        return (string) $this->resource;
+        return $this->resource;
     }
 
     /**
-     * {@inheritdoc}
+     * @return string The canonicalized, absolute path to the resource
      */
     public function getResource()
     {
@@ -56,20 +62,6 @@ class FileResource implements SelfCheckingResourceInterface, \Serializable
      */
     public function isFresh($timestamp)
     {
-        if (false === $this->resource || !file_exists($this->resource)) {
-            return false;
-        }
-
-        return filemtime($this->resource) <= $timestamp;
-    }
-
-    public function serialize()
-    {
-        return serialize($this->resource);
-    }
-
-    public function unserialize($serialized)
-    {
-        $this->resource = unserialize($serialized);
+        return false !== ($filemtime = @filemtime($this->resource)) && $filemtime <= $timestamp;
     }
 }

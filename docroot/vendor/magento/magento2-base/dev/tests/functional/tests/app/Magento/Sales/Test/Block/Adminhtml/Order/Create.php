@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -279,20 +279,22 @@ class Create extends Block
     }
 
     /**
-     * Fill addresses based on present data in customer and order fixtures.
+     * Fill Billing Address.
      *
-     * @param FixtureInterface $address
-     * @param string $saveAddress
+     * @param FixtureInterface $billingAddress
+     * @param string $saveAddress [optional]
      * @param bool $setShippingAddress [optional]
      * @return void
      */
-    public function fillAddresses(FixtureInterface $address, $saveAddress = 'No', $setShippingAddress = true)
-    {
-        if ($setShippingAddress) {
+    public function fillBillingAddress(
+        FixtureInterface $billingAddress,
+        $saveAddress = 'No',
+        $setShippingAddress = true
+    ) {
+        if ($setShippingAddress !== false) {
             $this->getShippingAddressBlock()->uncheckSameAsBillingShippingAddress();
         }
-        $this->browser->find($this->header)->hover();
-        $this->getBillingAddressBlock()->fill($address);
+        $this->getBillingAddressBlock()->fill($billingAddress);
         $this->getBillingAddressBlock()->saveInAddressBookBillingAddress($saveAddress);
         $this->getTemplateBlock()->waitLoader();
         if ($setShippingAddress) {
@@ -321,7 +323,6 @@ class Create extends Block
      */
     public function selectShippingMethod(array $shippingMethod)
     {
-        $this->_rootElement->find($this->orderMethodsSelector)->click();
         $this->getShippingMethodBlock()->selectShippingMethod($shippingMethod);
         $this->getTemplateBlock()->waitLoader();
     }
@@ -337,6 +338,7 @@ class Create extends Block
         $this->getTemplateBlock()->waitLoader();
         $this->_rootElement->find($this->orderMethodsSelector)->click();
         $this->getBillingMethodBlock()->selectPaymentMethod($paymentCode, $creditCard);
+        $this->_rootElement->click();
         $this->getTemplateBlock()->waitLoader();
     }
 

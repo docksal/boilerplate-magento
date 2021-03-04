@@ -12,6 +12,7 @@
 namespace Monolog\Formatter;
 
 use Exception;
+use Monolog\Utils;
 
 /**
  * Normalizes incoming records to remove objects/resources so it's easier to dump to various targets
@@ -55,8 +56,12 @@ class NormalizerFormatter implements FormatterInterface
         return $records;
     }
 
-    protected function normalize($data)
+    protected function normalize($data, $depth = 0)
     {
+        if ($depth > 9) {
+            return 'Over 9 levels deep, aborting normalization';
+        }
+
         if (null === $data || is_scalar($data)) {
             if (is_float($data)) {
                 if (is_infinite($data)) {
@@ -70,16 +75,17 @@ class NormalizerFormatter implements FormatterInterface
             return $data;
         }
 
-        if (is_array($data) || $data instanceof \Traversable) {
+        if (is_array($data)) {
             $normalized = array();
 
             $count = 1;
             foreach ($data as $key => $value) {
-                if ($count++ >= 1000) {
-                    $normalized['...'] = 'Over 1000 items, aborting normalization';
+                if ($count++ > 1000) {
+                    $normalized['...'] = 'Over 1000 items ('.count($data).' total), aborting normalization';
                     break;
                 }
-                $normalized[$key] = $this->normalize($value);
+
+                $normalized[$key] = $this->normalize($value, $depth+1);
             }
 
             return $normalized;
@@ -90,44 +96,61 @@ class NormalizerFormatter implements FormatterInterface
         }
 
         if (is_object($data)) {
-            if ($data instanceof Exception) {
+            // TODO 2.0 only check for Throwable
+            if ($data instanceof Exception || (PHP_VERSION_ID > 70000 && $data instanceof \Throwable)) {
                 return $this->normalizeException($data);
             }
 
             // non-serializable objects that implement __toString stringified
             if (method_exists($data, '__toString') && !$data instanceof \JsonSerializable) {
-                $value = (string) $data;
+                $value = $data->__toString();
             } else {
                 // the rest is json-serialized in some way
                 $value = $this->toJson($data, true);
             }
 
-            return sprintf("[object] (%s: %s)", get_class($data), $value);
+            return sprintf("[object] (%s: %s)", Utils::getClass($data), $value);
         }
 
         if (is_resource($data)) {
-            return '[resource]';
+            return sprintf('[resource] (%s)', get_resource_type($data));
         }
 
         return '[unknown('.gettype($data).')]';
     }
 
-    protected function normalizeException(Exception $e)
+    protected function normalizeException($e)
     {
+        // TODO 2.0 only check for Throwable
+        if (!$e instanceof Exception && !$e instanceof \Throwable) {
+            throw new \InvalidArgumentException('Exception/Throwable expected, got '.gettype($e).' / '.Utils::getClass($e));
+        }
+
         $data = array(
-            'class' => get_class($e),
+            'class' => Utils::getClass($e),
             'message' => $e->getMessage(),
-            'code' => $e->getCode(),
+            'code' => (int) $e->getCode(),
             'file' => $e->getFile().':'.$e->getLine(),
         );
+
+        if ($e instanceof \SoapFault) {
+            if (isset($e->faultcode)) {
+                $data['faultcode'] = $e->faultcode;
+            }
+
+            if (isset($e->faultactor)) {
+                $data['faultactor'] = $e->faultactor;
+            }
+
+            if (isset($e->detail) && (is_string($e->detail) || is_object($e->detail) || is_array($e->detail))) {
+                $data['detail'] = is_string($e->detail) ? $e->detail : reset($e->detail);
+            }
+        }
 
         $trace = $e->getTrace();
         foreach ($trace as $frame) {
             if (isset($frame['file'])) {
                 $data['trace'][] = $frame['file'].':'.$frame['line'];
-            } else {
-                // We should again normalize the frames, because it might contain invalid items
-                $data['trace'][] = $this->toJson($this->normalize($frame), true);
             }
         }
 
@@ -138,56 +161,16 @@ class NormalizerFormatter implements FormatterInterface
         return $data;
     }
 
+    /**
+     * Return the JSON representation of a value
+     *
+     * @param  mixed             $data
+     * @param  bool              $ignoreErrors
+     * @throws \RuntimeException if encoding fails and errors are not ignored
+     * @return string
+     */
     protected function toJson($data, $ignoreErrors = false)
     {
-        // suppress json_encode errors since it's twitchy with some inputs
-        if ($ignoreErrors) {
-            if (version_compare(PHP_VERSION, '5.4.0', '>=')) {
-                return @json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            }
-
-            return @json_encode($data);
-        }
-
-        if (version_compare(PHP_VERSION, '5.4.0', '>=')) {
-            $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        } else {
-            $json = json_encode($data);
-        }
-
-        if ($json === false) {
-            $this->throwEncodeError(json_last_error(), $data);
-        }
-
-        return $json;
-    }
-
-    /**
-     * Throws an exception according to a given code with a customized message
-     *
-     * @param int   $code return code of json_last_error function
-     * @param mixed $data data that was meant to be encoded
-     * @throws \RuntimeException
-     */
-    private function throwEncodeError($code, $data)
-    {
-        switch ($code) {
-            case JSON_ERROR_DEPTH:
-                $msg = 'Maximum stack depth exceeded';
-                break;
-            case JSON_ERROR_STATE_MISMATCH:
-                $msg = 'Underflow or the modes mismatch';
-                break;
-            case JSON_ERROR_CTRL_CHAR:
-                $msg = 'Unexpected control character found';
-                break;
-            case JSON_ERROR_UTF8:
-                $msg = 'Malformed UTF-8 characters, possibly incorrectly encoded';
-                break;
-            default:
-                $msg = 'Unknown error';
-        }
-
-        throw new \RuntimeException('JSON encoding failed: '.$msg.'. Encoding: '.var_export($data, true));
+        return Utils::jsonEncode($data, null, $ignoreErrors);
     }
 }

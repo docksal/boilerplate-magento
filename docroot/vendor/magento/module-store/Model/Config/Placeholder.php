@@ -1,12 +1,13 @@
 <?php
 /**
- * Placeholder configuration values processor. Replace placeholders in configuration with config values
- *
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Store\Model\Config;
 
+/**
+ * Placeholder configuration values processor. Replace placeholders in configuration with config values
+ */
 class Placeholder
 {
     /**
@@ -89,8 +90,9 @@ class Placeholder
 
             if ($url) {
                 $value = str_replace('{{' . $placeholder . '}}', $url, $value);
-            } elseif (strpos($value, $this->urlPlaceholder) !== false) {
+            } elseif (strpos($value, (string) $this->urlPlaceholder) !== false) {
                 $distroBaseUrl = $this->request->getDistroBaseUrl();
+
                 $value = str_replace($this->urlPlaceholder, $distroBaseUrl, $value);
             }
 
@@ -113,7 +115,7 @@ class Placeholder
             $placeholder = $matches[1];
             if ($placeholder == 'unsecure_base_url' || $placeholder == 'secure_base_url' || strpos(
                 $value,
-                $this->urlPlaceholder
+                (string) $this->urlPlaceholder
             ) !== false
             ) {
                 return $placeholder;

@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Downloadable\Model\Link;
@@ -13,6 +13,8 @@ use Magento\Framework\DataObject\Copy;
 
 /**
  * Class Builder
+ * @api
+ * @since 100.1.0
  */
 class Builder
 {
@@ -67,8 +69,11 @@ class Builder
     }
 
     /**
+     * Set Data.
+     *
      * @param array $data
      * @return $this
+     * @since 100.1.0
      */
     public function setData(array $data)
     {
@@ -77,9 +82,12 @@ class Builder
     }
 
     /**
+     * Build correct data structure.
+     *
      * @param \Magento\Downloadable\Api\Data\LinkInterface $link
      * @return \Magento\Downloadable\Api\Data\LinkInterface
      * @throws \Magento\Framework\Exception\LocalizedException
+     * @since 100.1.0
      */
     public function build(\Magento\Downloadable\Api\Data\LinkInterface $link)
     {
@@ -130,6 +138,8 @@ class Builder
     }
 
     /**
+     * Reset data.
+     *
      * @return void
      */
     private function resetData()
@@ -138,6 +148,8 @@ class Builder
     }
 
     /**
+     * Get existing component or create new.
+     *
      * @return Link
      */
     private function getComponent()
@@ -149,6 +161,8 @@ class Builder
     }
 
     /**
+     * Build correct sample structure.
+     *
      * @param \Magento\Downloadable\Api\Data\LinkInterface $link
      * @param array $sample
      * @return \Magento\Downloadable\Api\Data\LinkInterface
@@ -170,7 +184,8 @@ class Builder
                 ),
                 \Magento\Downloadable\Api\Data\LinkInterface::class
             );
-            if ($link->getSampleType() === \Magento\Downloadable\Helper\Download::LINK_TYPE_FILE) {
+            if ($link->getSampleType() === \Magento\Downloadable\Helper\Download::LINK_TYPE_FILE
+                && isset($sample['file'])) {
                 $linkSampleFileName = $this->downloadableFile->moveFileFromTmp(
                     $this->getComponent()->getBaseSampleTmpPath(),
                     $this->getComponent()->getBaseSamplePath(),

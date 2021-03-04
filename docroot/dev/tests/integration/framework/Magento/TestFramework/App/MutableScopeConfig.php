@@ -2,7 +2,7 @@
 /**
  * Application configuration object. Used to access configuration when application is installed.
  *
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -23,10 +23,7 @@ class MutableScopeConfig implements MutableScopeConfigInterface
     private $testAppConfig;
 
     /**
-     * @param string $path
-     * @param string $scopeType
-     * @param null $scopeCode
-     * @return bool
+     * @inheritdoc
      */
     public function isSetFlag($path, $scopeType = ScopeConfigInterface::SCOPE_TYPE_DEFAULT, $scopeCode = null)
     {

@@ -1,11 +1,10 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Sales\Model\ResourceModel\Order\Payment;
 
-use Magento\Sales\Api\Data\OrderPaymentInterface;
 use Magento\Sales\Api\Data\OrderPaymentSearchResultInterface;
 use Magento\Sales\Model\ResourceModel\Order\Collection\AbstractCollection;
 
@@ -34,7 +33,7 @@ class Collection extends AbstractCollection implements OrderPaymentSearchResultI
      * @param \Magento\Framework\Data\Collection\Db\FetchStrategyInterface $fetchStrategy
      * @param \Magento\Framework\Event\ManagerInterface $eventManager
      * @param \Magento\Framework\Model\ResourceModel\Db\VersionControl\Snapshot $entitySnapshot
-     * @param null $connection
+     * @param \Magento\Framework\DB\Adapter\AdapterInterface $connection
      * @param \Magento\Framework\Model\ResourceModel\Db\AbstractDb $resource
      */
     public function __construct(
@@ -64,7 +63,10 @@ class Collection extends AbstractCollection implements OrderPaymentSearchResultI
      */
     protected function _construct()
     {
-        $this->_init('Magento\Sales\Model\Order\Payment', 'Magento\Sales\Model\ResourceModel\Order\Payment');
+        $this->_init(
+            \Magento\Sales\Model\Order\Payment::class,
+            \Magento\Sales\Model\ResourceModel\Order\Payment::class
+        );
     }
 
     /**
@@ -76,34 +78,7 @@ class Collection extends AbstractCollection implements OrderPaymentSearchResultI
     {
         foreach ($this->_items as $item) {
             $this->getResource()->unserializeFields($item);
-            if (!empty($item->getData(OrderPaymentInterface::ADDITIONAL_INFORMATION))) {
-                $additionalInfo = $this->convertAdditionalInfo(
-                    $item->getData(OrderPaymentInterface::ADDITIONAL_INFORMATION)
-                );
-                $item->setData(OrderPaymentInterface::ADDITIONAL_INFORMATION, $additionalInfo);
-            }
         }
         return parent::_afterLoad();
-    }
-
-    /**
-     * Convert multidimensional additional information array to single
-     *
-     * @param array $info
-     * @return array
-     */
-    private function convertAdditionalInfo($info)
-    {
-        $result = [];
-        foreach ($info as $key => $item) {
-            if (is_array($item)) {
-                $result += $this->convertAdditionalInfo($item);
-                unset($info[$key]);
-            } else {
-                $result[$key] = $item;
-            }
-        }
-
-        return $result;
     }
 }

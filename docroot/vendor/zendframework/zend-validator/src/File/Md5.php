@@ -9,13 +9,15 @@
 
 namespace Zend\Validator\File;
 
-use Zend\Validator\Exception;
+use Zend\Validator\File\FileInformationTrait;
 
 /**
  * Validator for the md5 hash of given files
  */
 class Md5 extends Hash
 {
+    use FileInformationTrait;
+
     /**
      * @const string Error constants
      */
@@ -26,21 +28,21 @@ class Md5 extends Hash
     /**
      * @var array Error message templates
      */
-    protected $messageTemplates = array(
+    protected $messageTemplates = [
         self::DOES_NOT_MATCH => "File does not match the given md5 hashes",
         self::NOT_DETECTED   => "An md5 hash could not be evaluated for the given file",
         self::NOT_FOUND      => "File is not readable or does not exist",
-    );
+    ];
 
     /**
      * Options for this validator
      *
      * @var string
      */
-    protected $options = array(
+    protected $options = [
         'algorithm' => 'md5',
         'hash'      => null,
-    );
+    ];
 
     /**
      * Returns all set md5 hashes
@@ -85,32 +87,18 @@ class Md5 extends Hash
      */
     public function isValid($value, $file = null)
     {
-        if (is_string($value) && is_array($file)) {
-            // Legacy Zend\Transfer API support
-            $filename = $file['name'];
-            $file     = $file['tmp_name'];
-        } elseif (is_array($value)) {
-            if (!isset($value['tmp_name']) || !isset($value['name'])) {
-                throw new Exception\InvalidArgumentException(
-                    'Value array must be in $_FILES format'
-                );
-            }
-            $file     = $value['tmp_name'];
-            $filename = $value['name'];
-        } else {
-            $file     = $value;
-            $filename = basename($file);
-        }
-        $this->setValue($filename);
+        $fileInfo = $this->getFileInfo($value, $file);
+
+        $this->setValue($fileInfo['filename']);
 
         // Is file readable ?
-        if (empty($file) || false === stream_resolve_include_path($file)) {
+        if (empty($fileInfo['file']) || false === is_readable($fileInfo['file'])) {
             $this->error(self::NOT_FOUND);
             return false;
         }
 
-        $hashes = array_unique(array_keys($this->getHash()));
-        $filehash = hash_file('md5', $file);
+        $hashes   = array_unique(array_keys($this->getHash()));
+        $filehash = hash_file('md5', $fileInfo['file']);
         if ($filehash === false) {
             $this->error(self::NOT_DETECTED);
             return false;

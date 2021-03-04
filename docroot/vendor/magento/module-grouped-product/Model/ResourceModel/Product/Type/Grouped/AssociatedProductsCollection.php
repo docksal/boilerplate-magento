@@ -2,13 +2,16 @@
 /**
  * Associated products collection
  *
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\GroupedProduct\Model\ResourceModel\Product\Type\Grouped;
 
 /**
+ * Associated products collection.
+ *
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
+ * @SuppressWarnings(PHPMD.CookieAndSessionMisuse)
  */
 class AssociatedProductsCollection extends \Magento\Catalog\Model\ResourceModel\Product\Link\Product\Collection
 {
@@ -18,7 +21,6 @@ class AssociatedProductsCollection extends \Magento\Catalog\Model\ResourceModel\
      * @var \Magento\Framework\Registry
      */
     protected $_coreRegistry = null;
-
     /**
      * Product types config
      *

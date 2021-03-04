@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Checkout\Block\Cart\Item;
@@ -9,7 +9,9 @@ namespace Magento\Checkout\Block\Cart\Item;
  * Cart Item Configure block
  * Updates templates and blocks to show 'Update Cart' button and set right form submit url
  *
+ * @api
  * @module     Checkout
+ * @since 100.0.2
  */
 class Configure extends \Magento\Framework\View\Element\Template
 {

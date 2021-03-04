@@ -1,10 +1,8 @@
 <?php
 /**
- * Zend Framework (http://framework.zend.com/)
- *
- * @link      http://github.com/zendframework/zf2 for the canonical source repository
- * @copyright Copyright (c) 2005-2015 Zend Technologies USA Inc. (http://www.zend.com)
- * @license   http://framework.zend.com/license/new-bsd New BSD License
+ * @see       https://github.com/zendframework/zend-http for the canonical source repository
+ * @copyright Copyright (c) 2005-2017 Zend Technologies USA Inc. (http://www.zend.com)
+ * @license   https://github.com/zendframework/zend-http/blob/master/LICENSE.md New BSD License
  */
 
 namespace Zend\Http\Header;
@@ -33,14 +31,12 @@ class Authorization implements HeaderInterface
         }
 
         // @todo implementation details
-        $header = new static($value);
-
-        return $header;
+        return new static($value);
     }
 
     public function __construct($value = null)
     {
-        if ($value) {
+        if ($value !== null) {
             HeaderValue::assertValid($value);
             $this->value = $value;
         }
@@ -53,7 +49,7 @@ class Authorization implements HeaderInterface
 
     public function getFieldValue()
     {
-        return $this->value;
+        return (string) $this->value;
     }
 
     public function toString()

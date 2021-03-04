@@ -25,11 +25,17 @@ use Composer\Json\JsonFile;
 class RepositoryFactory
 {
     /**
-     * @return array
+     * @param  IOInterface $io
+     * @param  Config      $config
+     * @param  string      $repository
+     * @param  bool        $allowFilesystem
+     * @return array|mixed
      */
     public static function configFromString(IOInterface $io, Config $config, $repository, $allowFilesystem = false)
     {
-        if ("json" === pathinfo($repository, PATHINFO_EXTENSION)) {
+        if (0 === strpos($repository, 'http')) {
+            $repoConfig = array('type' => 'composer', 'url' => $repository);
+        } elseif ("json" === pathinfo($repository, PATHINFO_EXTENSION)) {
             $json = new JsonFile($repository, Factory::createRemoteFilesystem($io, $config));
             $data = $json->read();
             if (!empty($data['packages']) || !empty($data['includes']) || !empty($data['provider-includes'])) {
@@ -39,8 +45,6 @@ class RepositoryFactory
             } else {
                 throw new \InvalidArgumentException("Invalid repository URL ($repository) given. This file does not contain a valid composer repository.");
             }
-        } elseif (0 === strpos($repository, 'http')) {
-            $repoConfig = array('type' => 'composer', 'url' => $repository);
         } elseif ('{' === substr($repository, 0, 1)) {
             // assume it is a json object that makes a repo config
             $repoConfig = JsonFile::parseJson($repository);
@@ -52,6 +56,10 @@ class RepositoryFactory
     }
 
     /**
+     * @param  IOInterface         $io
+     * @param  Config              $config
+     * @param  string              $repository
+     * @param  bool                $allowFilesystem
      * @return RepositoryInterface
      */
     public static function fromString(IOInterface $io, Config $config, $repository, $allowFilesystem = false)
@@ -62,9 +70,12 @@ class RepositoryFactory
     }
 
     /**
+     * @param  IOInterface         $io
+     * @param  Config              $config
+     * @param  array               $repoConfig
      * @return RepositoryInterface
      */
-    public static function createRepo($io, $config, array $repoConfig)
+    public static function createRepo(IOInterface $io, Config $config, array $repoConfig)
     {
         $rm = static::manager($io, $config, null, Factory::createRemoteFilesystem($io, $config));
         $repos = static::createRepos($rm, array($repoConfig));
@@ -73,12 +84,18 @@ class RepositoryFactory
     }
 
     /**
+     * @param  IOInterface|null       $io
+     * @param  Config|null            $config
+     * @param  RepositoryManager|null $rm
      * @return RepositoryInterface[]
      */
     public static function defaultRepos(IOInterface $io = null, Config $config = null, RepositoryManager $rm = null)
     {
         if (!$config) {
             $config = Factory::createConfig($io);
+        }
+        if ($io) {
+            $io->loadConfiguration($config);
         }
         if (!$rm) {
             if (!$io) {
@@ -105,10 +122,14 @@ class RepositoryFactory
         $rm->setRepositoryClass('package', 'Composer\Repository\PackageRepository');
         $rm->setRepositoryClass('pear', 'Composer\Repository\PearRepository');
         $rm->setRepositoryClass('git', 'Composer\Repository\VcsRepository');
+        $rm->setRepositoryClass('git-bitbucket', 'Composer\Repository\VcsRepository');
+        $rm->setRepositoryClass('github', 'Composer\Repository\VcsRepository');
         $rm->setRepositoryClass('gitlab', 'Composer\Repository\VcsRepository');
         $rm->setRepositoryClass('svn', 'Composer\Repository\VcsRepository');
+        $rm->setRepositoryClass('fossil', 'Composer\Repository\VcsRepository');
         $rm->setRepositoryClass('perforce', 'Composer\Repository\VcsRepository');
         $rm->setRepositoryClass('hg', 'Composer\Repository\VcsRepository');
+        $rm->setRepositoryClass('hg-bitbucket', 'Composer\Repository\VcsRepository');
         $rm->setRepositoryClass('artifact', 'Composer\Repository\ArtifactRepository');
         $rm->setRepositoryClass('path', 'Composer\Repository\PathRepository');
 
@@ -139,7 +160,7 @@ class RepositoryFactory
             if ($repo['type'] === 'filesystem') {
                 $repos[$name] = new FilesystemRepository($repo['json']);
             } else {
-                $repos[$name] = $rm->createRepository($repo['type'], $repo);
+                $repos[$name] = $rm->createRepository($repo['type'], $repo, $index);
             }
         }
 

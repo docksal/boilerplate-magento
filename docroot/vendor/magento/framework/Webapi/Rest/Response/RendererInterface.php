@@ -2,11 +2,17 @@
 /**
  * Interface of REST response renderers.
  *
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\Webapi\Rest\Response;
 
+/**
+ * Renderer interface allows REST response data rendering in a specific format (e.g. Json or Xml)
+ *
+ * @api
+ * @since 100.0.2
+ */
 interface RendererInterface
 {
     /**

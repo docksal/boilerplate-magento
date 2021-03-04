@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -9,6 +9,12 @@
  */
 namespace Magento\Framework\Filter;
 
+/**
+ * Template filter
+ *
+ * @api
+ * @since 100.0.2
+ */
 class Template implements \Zend_Filter_Interface
 {
     /**
@@ -16,22 +22,27 @@ class Template implements \Zend_Filter_Interface
      */
     const CONSTRUCTION_PATTERN = '/{{([a-z]{0,10})(.*?)}}/si';
 
-    /**#@+
-     * Construction logic regular expression
+    /**
+     * Construction `depend` regular expression
      */
     const CONSTRUCTION_DEPEND_PATTERN = '/{{depend\s*(.*?)}}(.*?){{\\/depend\s*}}/si';
 
+    /**
+     * Construction `if` regular expression
+     */
     const CONSTRUCTION_IF_PATTERN = '/{{if\s*(.*?)}}(.*?)({{else}}(.*?))?{{\\/if\s*}}/si';
 
+    /**
+     * Construction `template` regular expression
+     */
     const CONSTRUCTION_TEMPLATE_PATTERN = '/{{(template)(.*?)}}/si';
 
-    /**#@-*/
-
     /**
-     * Callbacks that will be applied after filtering
-     *
-     * @var array
+     * Construction `for` regular expression
      */
+    const LOOP_PATTERN = '/{{for(?P<loopItem>.*? )(in)(?P<loopData>.*?)}}(?P<loopBody>.*?){{\/for}}/si';
+
+    /**#@-*/
     private $afterFilterCallbacks = [];
 
     /**
@@ -52,6 +63,46 @@ class Template implements \Zend_Filter_Interface
      * @var \Magento\Framework\Stdlib\StringUtils
      */
     protected $string;
+
+    /**
+     * @var string[]
+     */
+    private $restrictedMethods = [
+        'addafterfiltercallback',
+        'getresourcecollection',
+        'load',
+        'save',
+        'getcollection',
+        'getresource',
+        'getconfig',
+        'setvariables',
+        'settemplateprocessor',
+        'gettemplateprocessor',
+        'vardirective',
+        'delete',
+        'getdatausingmethod',
+        '__destruct',
+        '__call',
+        '__callstatic',
+        '__set',
+        '__unset',
+        '__sleep',
+        '__wakeup',
+        '__invoke',
+        '__set_state',
+        '__debuginfo',
+        '___callparent',
+        '___callplugins'
+    ];
+
+    /**
+     * @var array[]
+     */
+    private $restrictedMethodsByInstanceType = [
+        \Magento\Framework\DB\Adapter\AdapterInterface::class => [
+            '*'
+        ]
+    ];
 
     /**
      * @param \Magento\Framework\Stdlib\StringUtils $string
@@ -131,6 +182,8 @@ class Template implements \Zend_Filter_Interface
             }
         }
 
+        $value = $this->filterFor($value);
+
         if (preg_match_all(self::CONSTRUCTION_PATTERN, $value, $constructions, PREG_SET_ORDER)) {
             foreach ($constructions as $construction) {
                 $callback = [$this, $construction[1] . 'Directive'];
@@ -151,6 +204,56 @@ class Template implements \Zend_Filter_Interface
     }
 
     /**
+     * Filter the string as template.
+     *
+     * @param string $value
+     * @example syntax {{for item in order.items}} name: {{var item.name}} {{/for}} order items collection.
+     * @example syntax {{for thing in things}} {{var thing.whatever}} {{/for}} e.g.:custom collection.
+     * @return string
+     */
+    private function filterFor($value)
+    {
+        if (preg_match_all(self::LOOP_PATTERN, $value, $constructions, PREG_SET_ORDER)) {
+            foreach ($constructions as $construction) {
+                if (!$this->isValidLoop($construction)) {
+                    return $value;
+                }
+
+                $fullTextToReplace = $construction[0];
+                $loopData = $this->getVariable($construction['loopData'], '');
+
+                $loopTextToReplace = $construction['loopBody'];
+                $loopItemVariableName = preg_replace('/\s+/', '', $construction['loopItem']);
+
+                if (is_array($loopData) || $loopData instanceof \Traversable) {
+                    $replaceText = $this->getLoopReplacementText($loopData, $loopItemVariableName, $loopTextToReplace);
+                    $value = str_replace($fullTextToReplace, $replaceText, $value);
+                }
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * Check if the matched construction is valid.
+     *
+     * @param array $construction
+     * @return bool
+     */
+    private function isValidLoop(array $construction)
+    {
+        $requiredFields = ['loopBody', 'loopItem', 'loopData'];
+        $validFields = array_filter(
+            $requiredFields,
+            function ($field) use ($construction) {
+                return isset($construction[$field]) && strlen(trim($construction[$field]));
+            }
+        );
+        return count($requiredFields) == count($validFields);
+    }
+
+    /**
      * Runs callbacks that have been added to filter content after directive processing is finished.
      *
      * @param string $value
@@ -168,8 +271,9 @@ class Template implements \Zend_Filter_Interface
     }
 
     /**
-     * Adds a callback to run after main filtering has happened. Callback must accept a single argument and return
-     * a string of the processed value.
+     * Adds a callback to run after main filtering has happened.
+     *
+     * Callback must accept a single argument and return a string of the processed value.
      *
      * @param callable $afterFilterCallback
      * @return $this
@@ -197,6 +301,8 @@ class Template implements \Zend_Filter_Interface
     }
 
     /**
+     * Get var directive
+     *
      * @param string[] $construction
      * @return string
      */
@@ -228,7 +334,7 @@ class Template implements \Zend_Filter_Interface
     {
         // Processing of {template config_path=... [...]} statement
         $templateParameters = $this->getParameters($construction[2]);
-        if (!isset($templateParameters['config_path']) or !$this->getTemplateProcessor()) {
+        if (!isset($templateParameters['config_path']) || !$this->getTemplateProcessor()) {
             // Not specified template or not set include processor
             $replacedValue = '{Error in template processing}';
         } else {
@@ -242,6 +348,8 @@ class Template implements \Zend_Filter_Interface
     }
 
     /**
+     * Get depend directive
+     *
      * @param string[] $construction
      * @return string
      */
@@ -260,6 +368,8 @@ class Template implements \Zend_Filter_Interface
     }
 
     /**
+     * If directive
+     *
      * @param string[] $construction
      * @return string
      */
@@ -299,7 +409,34 @@ class Template implements \Zend_Filter_Interface
     }
 
     /**
-     * Return variable value for var construction
+     * Validate method call initiated in a template.
+     *
+     * Deny calls for methods that may disrupt template processing.
+     *
+     * @param object $object
+     * @param string $method
+     * @return void
+     * @throws \InvalidArgumentException
+     */
+    private function validateVariableMethodCall($object, string $method): void
+    {
+        if ($object instanceof self || $object instanceof \Magento\Framework\DataObject) {
+            if (in_array(mb_strtolower($method), $this->restrictedMethods)) {
+                throw new \InvalidArgumentException("Method $method cannot be called from template.");
+            }
+        } else {
+            foreach ($this->restrictedMethodsByInstanceType as $instanceType => $restrictedMethods) {
+                if ($object instanceof $instanceType &&
+                    (in_array('*', $restrictedMethods) || in_array(mb_strtolower($method), $restrictedMethods))
+                ) {
+                    throw new \InvalidArgumentException("Method $method cannot be called from template.");
+                }
+            }
+        }
+    }
+
+    /**
+     * Return variable value for var construction.
      *
      * @param string $value raw parameters
      * @param string $default default value
@@ -314,35 +451,22 @@ class Template implements \Zend_Filter_Interface
         $stackVars = $tokenizer->tokenize();
         $result = $default;
         $last = 0;
-        for ($i = 0; $i < count($stackVars); $i++) {
+        for ($i = 0, $count = count($stackVars); $i < $count; $i++) {
             if ($i == 0 && isset($this->templateVars[$stackVars[$i]['name']])) {
                 // Getting of template value
                 $stackVars[$i]['variable'] = & $this->templateVars[$stackVars[$i]['name']];
-            } elseif (
-                    isset($stackVars[$i - 1]['variable'])
-                    && $stackVars[$i - 1]['variable'] instanceof \Magento\Framework\DataObject
-            ) {
-                // If object calling methods or getting properties
+            } elseif (isset($stackVars[$i - 1]['variable']) && is_object($stackVars[$i - 1]['variable'])) {
                 if ($stackVars[$i]['type'] == 'property') {
-                    $caller = 'get' . $this->string->upperCaseWords($stackVars[$i]['name'], '_', '');
-                    $stackVars[$i]['variable'] = method_exists(
+                    $stackVars[$i]['variable'] = $this->evaluateObjectPropertyAccess(
                         $stackVars[$i - 1]['variable'],
-                        $caller
-                    ) ? $stackVars[$i - 1]['variable']->{$caller}() : $stackVars[$i - 1]['variable']->getData(
                         $stackVars[$i]['name']
                     );
                 } elseif ($stackVars[$i]['type'] == 'method') {
-                    // Calling of object method
-                    if (
-                            method_exists($stackVars[$i - 1]['variable'], $stackVars[$i]['name'])
-                            || substr($stackVars[$i]['name'], 0, 3) == 'get'
-                    ) {
-                        $stackVars[$i]['args'] = $this->getStackArgs($stackVars[$i]['args']);
-                        $stackVars[$i]['variable'] = call_user_func_array(
-                            [$stackVars[$i - 1]['variable'], $stackVars[$i]['name']],
-                            $stackVars[$i]['args']
-                        );
-                    }
+                    $stackVars[$i]['variable'] = $this->evaluateObjectMethodCall(
+                        $stackVars[$i - 1]['variable'],
+                        $stackVars[$i]['name'],
+                        $stackVars[$i]['args']
+                    );
                 }
                 $last = $i;
             }
@@ -354,6 +478,45 @@ class Template implements \Zend_Filter_Interface
         }
         \Magento\Framework\Profiler::stop('email_template_processing_variables');
         return $result;
+    }
+
+    /**
+     * Evaluate object property access.
+     *
+     * @param object $object
+     * @param string $property
+     * @return null
+     */
+    private function evaluateObjectPropertyAccess($object, $property)
+    {
+        $method = 'get' . $this->string->upperCaseWords($property, '_', '');
+        $this->validateVariableMethodCall($object, $method);
+        return method_exists($object, $method)
+            ? $object->{$method}()
+            : (($object instanceof \Magento\Framework\DataObject) ? $object->getData($property) : null);
+    }
+
+    /**
+     * Evaluate object method call.
+     *
+     * @param object $object
+     * @param string $method
+     * @param array $arguments
+     * @return mixed|null
+     */
+    private function evaluateObjectMethodCall($object, $method, $arguments)
+    {
+        if (method_exists($object, $method)
+            || ($object instanceof \Magento\Framework\DataObject && substr($method, 0, 3) == 'get')
+        ) {
+            $arguments = $this->getStackArgs($arguments);
+            $this->validateVariableMethodCall($object, $method);
+            return call_user_func_array(
+                [$object, $method],
+                $arguments
+            );
+        }
+        return null;
     }
 
     /**
@@ -372,5 +535,54 @@ class Template implements \Zend_Filter_Interface
             }
         }
         return $stack;
+    }
+
+    /**
+     * Process loop text to replace.
+     *
+     * @param array $loopData
+     * @param string $loopItemVariableName
+     * @param string $loopTextToReplace
+     * @return string
+     */
+    private function getLoopReplacementText(array $loopData, $loopItemVariableName, $loopTextToReplace)
+    {
+        $loopText = [];
+        $loopIndex = 0;
+        $loopDataObject = new \Magento\Framework\DataObject();
+
+        foreach ($loopData as $loopItemDataObject) {
+            // Loop item can be an array or DataObject.
+            // If loop item is an array, convert it to DataObject
+            // to have unified interface if the collection
+            if (!$loopItemDataObject instanceof \Magento\Framework\DataObject) {
+                if (!is_array($loopItemDataObject)) {
+                    continue;
+                }
+                $loopItemDataObject = new \Magento\Framework\DataObject($loopItemDataObject);
+            }
+
+            $loopDataObject->setData('index', $loopIndex++);
+            $this->templateVars['loop'] = $loopDataObject;
+            $this->templateVars[$loopItemVariableName] = $loopItemDataObject;
+
+            if (preg_match_all(
+                self::CONSTRUCTION_PATTERN,
+                $loopTextToReplace,
+                $attributes,
+                PREG_SET_ORDER
+            )
+            ) {
+                $subText = $loopTextToReplace;
+                foreach ($attributes as $attribute) {
+                    $text = $this->getVariable($attribute[2], '');
+                    $subText = str_replace($attribute[0], $text, $subText);
+                }
+                $loopText[] = $subText;
+            }
+            unset($this->templateVars[$loopItemVariableName]);
+        }
+        $replaceText = implode('', $loopText);
+        return $replaceText;
     }
 }

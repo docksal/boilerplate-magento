@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\ConfigurableProduct\Test\Unit\Controller\Adminhtml\Product\Initialization\Helper\Plugin;
@@ -18,7 +18,7 @@ use PHPUnit_Framework_MockObject_MockObject as MockObject;
 /**
  * Class ConfigurableTest
  */
-class ConfigurableTest extends \PHPUnit_Framework_TestCase
+class ConfigurableTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var Magento\ConfigurableProduct\Model\Product\VariationHandler|MockObject
@@ -74,7 +74,7 @@ class ConfigurableTest extends \PHPUnit_Framework_TestCase
             ->disableOriginalConstructor()
             ->setMethods([
                 'getTypeId', 'setAttributeSetId', 'getExtensionAttributes', 'setNewVariationsAttributeSetId',
-                'setCanSaveConfigurableAttributes', 'setExtensionAttributes', 'hasData', 'getData'
+                'setCanSaveConfigurableAttributes', 'setExtensionAttributes'
             ])
             ->getMock();
 
@@ -99,7 +99,11 @@ class ConfigurableTest extends \PHPUnit_Framework_TestCase
                 ['value_index' => 12], ['value_index' => 13]
             ]]
         ];
-
+        $valueMap = [
+            ['new-variations-attribute-set-id', null, 24],
+            ['associated_product_ids_serialized', '[]', []],
+            ['product', [], ['configurable_attributes_data' => $attributes]],
+        ];
         $simpleProductsIds = [1, 2, 3];
         $simpleProducts = [
             [
@@ -145,38 +149,14 @@ class ConfigurableTest extends \PHPUnit_Framework_TestCase
                 'quantity_and_stock_status' => ['qty' => '3']
             ]
         ];
-
-        $productData = [
-            'configurable_attributes_data' => $attributes,
-            'associated_product_ids' => [],
-            'configurable-matrix' => $simpleProducts
-        ];
-        $valueMap = [
-            ['new-variations-attribute-set-id', null, 24],
-            ['product', [], $productData]
-        ];
-
         $paramValueMap = [
-            ['attributes', null, $attributes]
+            ['configurable-matrix-serialized', "[]", json_encode($simpleProducts)],
+            ['attributes', null, $attributes],
         ];
 
         $this->product->expects(static::once())
             ->method('getTypeId')
             ->willReturn(ConfigurableProduct::TYPE_CODE);
-
-        $this->product->expects(static::at(4))
-            ->method('hasData')
-            ->with('associated_product_ids')
-            ->willReturn(false);
-        $this->product->expects(static::at(5))
-            ->method('hasData')
-            ->with('configurable-matrix')
-            ->willReturn(true);
-
-        $this->product->expects(static::at(6))
-            ->method('getData')
-            ->with('configurable-matrix')
-            ->willReturn($simpleProducts);
 
         $this->request->expects(static::any())
             ->method('getPost')
@@ -230,29 +210,18 @@ class ConfigurableTest extends \PHPUnit_Framework_TestCase
                 ['value_index' => 12], ['value_index' => 13]
             ]]
         ];
-
-        $productData = [
-            'configurable_attributes_data' => $attributes,
-            'associated_product_ids' => [],
-            'configurable-matrix' => []
-        ];
-
         $valueMap = [
             ['new-variations-attribute-set-id', null, 24],
-            ['product', [], $productData],
+            ['associated_product_ids_serialized', "[]", "[]"],
+            ['product', [], ['configurable_attributes_data' => $attributes]],
         ];
         $paramValueMap = [
+            ['configurable-matrix-serialized', "[]", "[]"],
             ['attributes', null, $attributes],
         ];
 
         $this->product->expects(static::once())
             ->method('getTypeId')
-            ->willReturn(ConfigurableProduct::TYPE_CODE);
-        $this->product->expects(static::any())
-            ->method('hasData')
-            ->willReturn(false);
-        $this->product->expects(static::at(0))
-            ->method('getData')
             ->willReturn(ConfigurableProduct::TYPE_CODE);
 
         $this->request->expects(static::any())

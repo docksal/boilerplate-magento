@@ -76,8 +76,7 @@ This is a list of common pitfalls on using Composer, and how to avoid them.
 
 ## I have a dependency which contains a "repositories" definition in its composer.json, but it seems to be ignored.
 
-The [`repositories`](../04-schema.md#repositories) configuration property is defined as [root-only]
-(../04-schema.md#root-package). It is not inherited. You can read more about the reasons behind this in the "[why can't
+The [`repositories`](../04-schema.md#repositories) configuration property is defined as [root-only](../04-schema.md#root-package). It is not inherited. You can read more about the reasons behind this in the "[why can't
 composer load repositories recursively?](../faqs/why-can't-composer-load-repositories-recursively.md)" article.
 The simplest work-around to this limitation, is moving or duplicating the `repositories` definition into your root
 composer.json.
@@ -119,18 +118,13 @@ See [aliases](aliases.md) for more information.
 
 ## Memory limit errors
 
-If composer shows memory errors on some commands:
+Composer may sometimes fail on some commands with this message:
 
 `PHP Fatal error:  Allowed memory size of XXXXXX bytes exhausted <...>`
 
-Check first that XDebug is not loaded in your `php.ini` by running
-`composer diagnose`. If XDebug is loaded, you should disable it by
-commenting the line `zend_extension=path/to/xdebug` in your `php.ini`.
-Don't forget to enable XDebug again after using Composer, if you need it.
+In this case, the PHP `memory_limit` should be increased.
 
-If composer still raises the error, the PHP `memory_limit` should be increased.
-
-> **Note:** Composer internally increases the `memory_limit` to `1G`.
+> **Note:** Composer internally increases the `memory_limit` to `1.5G`.
 
 To get the current `memory_limit` value, run:
 
@@ -146,68 +140,28 @@ Debian-like systems):
 memory_limit = -1
 ```
 
+Composer also respects a memory limit defined by the `COMPOSER_MEMORY_LIMIT` environment variable:
+
+```sh
+COMPOSER_MEMORY_LIMIT=-1 composer.phar <...>
+```
+
 Or, you can increase the limit with a command-line argument:
 
 ```sh
 php -d memory_limit=-1 composer.phar <...>
 ```
 
+This issue can also happen on cPanel instances, when the shell fork bomb protection is activated. For more information, see the [documentation](https://documentation.cpanel.net/display/68Docs/Shell+Fork+Bomb+Protection) of the fork bomb feature on the cPanel site.
+
 ## Xdebug impact on Composer
 
-Running Composer console commands while the php extension "xdebug" is loaded reduces speed considerably.
-This is even the case when all "xdebug" related features are disabled per php.ini flags,
-but the php extension itself is loaded into the PHP engine.
-Compared to a cli command run with "xdebug" enabled a speed improvement by a factor of up to 3 is not uncommon.
+To improve performance when the xdebug extension is enabled, Composer automatically restarts PHP without it.
+You can override this behavior by using an environment variable: `COMPOSER_ALLOW_XDEBUG=1`.
 
-> **Note:** This is a general issue when running PHP with "xdebug" enabled. You shouldn't
-> load the extension in production like environments per se.
-
-Disable "xdebug" in your `php.ini` (ex. `/etc/php5/cli/php.ini` for Debian-like systems) by
-locating the related `zend_extension` directive and prepending it with `;` (semicolon):
-
-```sh
-;zend_extension = "/path/to/my/xdebug.so"
-```
-
-If you disable this extension and still want it to be added on `php` cli command, you can deal with aliases on *nix systems:
-
-```sh
-# Load xdebug Zend extension with php command
-alias php='php -dzend_extension=xdebug.so'
-# PHPUnit needs xdebug for coverage. In this case, just make an alias with php command prefix.
-alias phpunit='php $(which phpunit)'
-```
-
-With that, all php binaries called directly **will not** have xdebug enabled
-but you will still have it by prefixing them with php command.
-
-Example:
-
-```sh
-# Will NOT have xdebug enabled
-composer update
-# Will have xdebug enabled by alias
-php /usr/local/bin/composer update
-```
-
-As a workaround in bash (and other shells) you can create a function which is named `composer`,
-which disables xdebug before it executes composer, and then enables it afterwards.
-
-Create a function in a file read by bash, like `~/.bashrc` or `~/.bash_aliases` depending on
-your setup. This also assumes that you have sudo privileges and the `php5enmod` and `php5dismod`
-commands available. It also assumes that you have `composer` in your path.
-
-```sh
-echo 'function composer() { COMPOSER="$(which composer)" || { echo "Could not find composer in path" >&2 ; return 1 ; } && sudo php5dismod -s cli xdebug ; $COMPOSER "$@" ; STATUS=$? ; sudo php5enmod -s cli xdebug ; return $STATUS ; }' >> ~/.bash_aliases
-. ~/.bash_aliases
-```
-
-When executing `composer` you will run it with xdebug **disabled** (**as long as the command is executing**),
-and if you execute composer using explicit path (like `./composer` or `/usr/local/bin/composer`)
-xdebug will be **enabled**.
-
-If you do not want to disable it and want to get rid of the warning you can also define the
-[COMPOSER_DISABLE_XDEBUG_WARN](../03-cli.md#composer-disable-xdebug-warn) environment variable.
+Composer will always show a warning if xdebug is being used, but you can override this with an environment variable:
+`COMPOSER_DISABLE_XDEBUG_WARN=1`. If you see this warning unexpectedly, then the restart process has failed:
+please report this [issue](https://github.com/composer/composer/issues).
 
 ## "The system cannot find the path specified" (Windows)
 
@@ -215,7 +169,7 @@ If you do not want to disable it and want to get rid of the warning you can also
 2. Search for an `AutoRun` key inside `HKEY_LOCAL_MACHINE\Software\Microsoft\Command Processor`,
    `HKEY_CURRENT_USER\Software\Microsoft\Command Processor`
    or `HKEY_LOCAL_MACHINE\Software\Wow6432Node\Microsoft\Command Processor`.
-3. Check if it contains any path to non-existent file, if it's the case, just remove them.
+3. Check if it contains any path to non-existent file, if it's the case, remove them.
 
 ## API rate limit and OAuth tokens
 
@@ -255,6 +209,7 @@ To enable the swap you can use for example:
 /sbin/mkswap /var/swap.1
 /sbin/swapon /var/swap.1
 ```
+You can make a permanent swap file following this [tutorial](https://www.digitalocean.com/community/tutorials/how-to-add-swap-on-ubuntu-14-04).
 
 ## Degraded Mode
 
@@ -295,7 +250,7 @@ following workarounds:
 On linux, it seems that running this command helps to make ipv4 traffic have a
 higher prio than ipv6, which is a better alternative than disabling ipv6 entirely:
 
-```Bash
+```bash
 sudo sh -c "echo 'precedence ::ffff:0:0/96 100' >> /etc/gai.conf"
 ```
 
@@ -307,13 +262,13 @@ On windows the only way is to disable ipv6 entirely I am afraid (either in windo
 
 Get name of your network device:
 
-```
+```bash
 networksetup -listallnetworkservices
 ```
 
 Disable IPv6 on that device (in this case "Wi-Fi"):
 
-```
+```bash
 networksetup -setv6off Wi-Fi
 ```
 
@@ -321,7 +276,7 @@ Run composer ...
 
 You can enable IPv6 again with:
 
-```
+```bash
 networksetup -setv6automatic Wi-Fi
 ```
 
@@ -332,27 +287,23 @@ for everyone.
 ## Composer hangs with SSH ControlMaster
 
 When you try to install packages from a Git repository and you use the `ControlMaster`
-setting for you SSH connection  Composer might just hang endlessly and you see a `sh`
-process in the `defunct` state in your process list
+setting for your SSH connection, Composer might hang endlessly and you see a `sh`
+process in the `defunct` state in your process list.
 
 The reason for this is a SSH Bug: https://bugzilla.mindrot.org/show_bug.cgi?id=1988
 
 As a workaround, open a SSH connection to your Git host before running Composer:
 
-```
+```bash
 ssh -t git@mygitserver.tld
 composer update
 ```
 
 See also https://github.com/composer/composer/issues/4180 for more information.
 
-## Zip archives are being reported as corrupted or not unpacked correctly.
+## Zip archives are not unpacked correctly.
 
 Composer can unpack zipballs using either a system-provided `unzip` utility or PHP's
-native `ZipArchiver` class, preferring the first. The `ZipArchiver` class however is
-known to occassionally report valid zip files as corrupted, and does not support certain
-advanced features with permissions and symlinks.
-
-If you have issues with zip files you should install a native implementation of unzip
-and verify whether the problem persists. If so it is likely a real issue in the file
-itself and you should contact the provider.
+native `ZipArchive` class. The `ZipArchive` class is preferred on Windows. On other
+OSes where ZIP files can contain permissions and symlinks, the `unzip` utility is
+preferred. You're advised to install it if you need these features.

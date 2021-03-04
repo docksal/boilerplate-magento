@@ -13,9 +13,12 @@ namespace Monolog\Handler;
 
 use Monolog\Formatter\ChromePHPFormatter;
 use Monolog\Logger;
+use Monolog\Utils;
 
 /**
  * Handler sending logs to the ChromePHP extension (http://www.chromephp.com/)
+ *
+ * This also works out of the box with Firefox 43+
  *
  * @author Christophe Coevoet <stof@notk.org>
  */
@@ -31,14 +34,19 @@ class ChromePHPHandler extends AbstractProcessingHandler
      */
     const HEADER_NAME = 'X-ChromeLogger-Data';
 
+    /**
+     * Regular expression to detect supported browsers (matches any Chrome, or Firefox 43+)
+     */
+    const USER_AGENT_REGEX = '{\b(?:Chrome/\d+(?:\.\d+)*|HeadlessChrome|Firefox/(?:4[3-9]|[5-9]\d|\d{3,})(?:\.\d)*)\b}';
+
     protected static $initialized = false;
 
     /**
      * Tracks whether we sent too much data
      *
-     * Chrome limits the headers to 256KB, so when we sent 240KB we stop sending
+     * Chrome limits the headers to 4KB, so when we sent 3KB we stop sending
      *
-     * @var Boolean
+     * @var bool
      */
     protected static $overflowed = false;
 
@@ -51,8 +59,8 @@ class ChromePHPHandler extends AbstractProcessingHandler
     protected static $sendHeaders = true;
 
     /**
-     * @param integer $level  The minimum logging level at which this handler will be triggered
-     * @param Boolean $bubble Whether the messages that are handled can bubble up the stack or not
+     * @param int  $level  The minimum logging level at which this handler will be triggered
+     * @param bool $bubble Whether the messages that are handled can bubble up the stack or not
      */
     public function __construct($level = Logger::DEBUG, $bubble = true)
     {
@@ -127,9 +135,9 @@ class ChromePHPHandler extends AbstractProcessingHandler
             self::$json['request_uri'] = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
         }
 
-        $json = @json_encode(self::$json);
+        $json = Utils::jsonEncode(self::$json, null, true);
         $data = base64_encode(utf8_encode($json));
-        if (strlen($data) > 240 * 1024) {
+        if (strlen($data) > 3 * 1024) {
             self::$overflowed = true;
 
             $record = array(
@@ -142,7 +150,7 @@ class ChromePHPHandler extends AbstractProcessingHandler
                 'extra' => array(),
             );
             self::$json['rows'][count(self::$json['rows']) - 1] = $this->getFormatter()->format($record);
-            $json = @json_encode(self::$json);
+            $json = Utils::jsonEncode(self::$json, null, true);
             $data = base64_encode(utf8_encode($json));
         }
 
@@ -167,7 +175,7 @@ class ChromePHPHandler extends AbstractProcessingHandler
     /**
      * Verifies if the headers are accepted by the current user agent
      *
-     * @return Boolean
+     * @return bool
      */
     protected function headersAccepted()
     {
@@ -175,7 +183,7 @@ class ChromePHPHandler extends AbstractProcessingHandler
             return false;
         }
 
-        return preg_match('{\bChrome/\d+[\.\d+]*\b}', $_SERVER['HTTP_USER_AGENT']);
+        return preg_match(self::USER_AGENT_REGEX, $_SERVER['HTTP_USER_AGENT']);
     }
 
     /**

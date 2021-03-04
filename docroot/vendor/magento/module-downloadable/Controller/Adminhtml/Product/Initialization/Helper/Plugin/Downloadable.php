@@ -1,17 +1,21 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Downloadable\Controller\Adminhtml\Product\Initialization\Helper\Plugin;
 
-use Magento\Downloadable\Api\Data\SampleInterfaceFactory as SampleFactory;
-use Magento\Downloadable\Api\Data\LinkInterfaceFactory as LinkFactory;
-use Magento\Framework\App\ObjectManager;
+use Magento\Downloadable\Api\Data\LinkInterfaceFactory;
+use Magento\Downloadable\Api\Data\SampleInterfaceFactory;
+use Magento\Downloadable\Helper\Download;
+use Magento\Downloadable\Model\Link\Builder as LinkBuilder;
+use Magento\Downloadable\Model\Product\Type;
+use Magento\Downloadable\Model\ResourceModel\Sample\Collection;
+use Magento\Downloadable\Model\Sample\Builder as SampleBuilder;
 use Magento\Framework\App\RequestInterface;
 
 /**
- * Class Downloadable
+ * Class for initialization downloadable info from request.
  */
 class Downloadable
 {
@@ -21,32 +25,44 @@ class Downloadable
     protected $request;
 
     /**
-     * @var SampleFactory
+     * @var SampleInterfaceFactory
      */
     private $sampleFactory;
 
     /**
-     * @var LinkFactory
+     * @var LinkInterfaceFactory
      */
     private $linkFactory;
 
     /**
-     * @var \Magento\Downloadable\Model\Sample\Builder
+     * @var SampleBuilder
      */
     private $sampleBuilder;
 
     /**
-     * @var \Magento\Downloadable\Model\Link\Builder
+     * @var LinkBuilder
      */
     private $linkBuilder;
 
     /**
      * @param RequestInterface $request
+     * @param LinkBuilder $linkBuilder
+     * @param SampleBuilder $sampleBuilder
+     * @param SampleInterfaceFactory $sampleFactory
+     * @param LinkInterfaceFactory $linkFactory
      */
     public function __construct(
-        RequestInterface $request
+        RequestInterface $request,
+        LinkBuilder $linkBuilder,
+        SampleBuilder $sampleBuilder,
+        SampleInterfaceFactory $sampleFactory,
+        LinkInterfaceFactory $linkFactory
     ) {
         $this->request = $request;
+        $this->linkBuilder = $linkBuilder;
+        $this->sampleBuilder = $sampleBuilder;
+        $this->sampleFactory = $sampleFactory;
+        $this->linkFactory = $linkFactory;
     }
 
     /**
@@ -54,7 +70,6 @@ class Downloadable
      *
      * @param \Magento\Catalog\Controller\Adminhtml\Product\Initialization\Helper $subject
      * @param \Magento\Catalog\Model\Product $product
-     *
      * @return \Magento\Catalog\Model\Product
      * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      * @SuppressWarnings(PHPMD.CyclomaticComplexity)
@@ -65,22 +80,28 @@ class Downloadable
         \Magento\Catalog\Model\Product $product
     ) {
         if ($downloadable = $this->request->getPost('downloadable')) {
+            $product->setTypeId(Type::TYPE_DOWNLOADABLE);
             $product->setDownloadableData($downloadable);
             $extension = $product->getExtensionAttributes();
+            $productLinks = $product->getTypeInstance()->getLinks($product);
+            $productSamples = $product->getTypeInstance()->getSamples($product);
             if (isset($downloadable['link']) && is_array($downloadable['link'])) {
                 $links = [];
                 foreach ($downloadable['link'] as $linkData) {
                     if (!$linkData || (isset($linkData['is_delete']) && $linkData['is_delete'])) {
                         continue;
                     } else {
-                        $links[] = $this->getLinkBuilder()->setData(
+                        $linkData = $this->processLink($linkData, $productLinks);
+                        $links[] = $this->linkBuilder->setData(
                             $linkData
                         )->build(
-                            $this->getLinkFactory()->create()
+                            $this->linkFactory->create()
                         );
                     }
                 }
                 $extension->setDownloadableProductLinks($links);
+            } else {
+                $extension->setDownloadableProductLinks([]);
             }
             if (isset($downloadable['sample']) && is_array($downloadable['sample'])) {
                 $samples = [];
@@ -88,14 +109,17 @@ class Downloadable
                     if (!$sampleData || (isset($sampleData['is_delete']) && (bool)$sampleData['is_delete'])) {
                         continue;
                     } else {
-                        $samples[] = $this->getSampleBuilder()->setData(
+                        $sampleData = $this->processSample($sampleData, $productSamples);
+                        $samples[] = $this->sampleBuilder->setData(
                             $sampleData
                         )->build(
-                            $this->getSampleFactory()->create()
+                            $this->sampleFactory->create()
                         );
                     }
                 }
                 $extension->setDownloadableProductSamples($samples);
+            } else {
+                $extension->setDownloadableProductSamples([]);
             }
             $product->setExtensionAttributes($extension);
             if ($product->getLinksPurchasedSeparately()) {
@@ -108,64 +132,67 @@ class Downloadable
     }
 
     /**
-     * Get LinkBuilder instance
+     * Check Links type and status.
      *
-     * @deprecated
-     * @return \Magento\Downloadable\Model\Link\Builder
+     * @param array $linkData
+     * @param array $productLinks
+     * @return array
      */
-    private function getLinkBuilder()
+    private function processLink(array $linkData, array $productLinks): array
     {
-        if (!$this->linkBuilder) {
-            $this->linkBuilder = ObjectManager::getInstance()->get(\Magento\Downloadable\Model\Link\Builder::class);
-        }
-
-        return $this->linkBuilder;
-    }
-
-    /**
-     * Get SampleBuilder instance
-     *
-     * @deprecated
-     * @return \Magento\Downloadable\Model\Sample\Builder
-     */
-    private function getSampleBuilder()
-    {
-        if (!$this->sampleBuilder) {
-            $this->sampleBuilder = ObjectManager::getInstance()->get(
-                \Magento\Downloadable\Model\Sample\Builder::class
+        $linkId = $linkData['link_id'] ?? null;
+        if ($linkId && isset($productLinks[$linkId])) {
+            $linkData = $this->processFileStatus($linkData, $productLinks[$linkId]->getLinkFile());
+            $linkData['sample'] = $this->processFileStatus(
+                $linkData['sample'] ?? [],
+                $productLinks[$linkId]->getSampleFile()
             );
+        } else {
+            $linkData = $this->processFileStatus($linkData, null);
+            $linkData['sample'] = $this->processFileStatus($linkData['sample'] ?? [], null);
         }
 
-        return $this->sampleBuilder;
+        return $linkData;
     }
 
     /**
-     * Get LinkFactory instance
+     * Check Sample type and status.
      *
-     * @deprecated
-     * @return LinkFactory
+     * @param array $sampleData
+     * @param Collection $productSamples
+     * @return array
      */
-    private function getLinkFactory()
+    private function processSample(array $sampleData, Collection $productSamples): array
     {
-        if (!$this->linkFactory) {
-            $this->linkFactory = ObjectManager::getInstance()->get(LinkFactory::class);
+        $sampleId = $sampleData['sample_id'] ?? null;
+        /** @var \Magento\Downloadable\Model\Sample $productSample */
+        $productSample = $sampleId ? $productSamples->getItemById($sampleId) : null;
+        if ($sampleId && $productSample) {
+            $sampleData = $this->processFileStatus($sampleData, $productSample->getSampleFile());
+        } else {
+            $sampleData = $this->processFileStatus($sampleData, null);
         }
 
-        return $this->linkFactory;
+        return $sampleData;
     }
 
     /**
-     * Get Sample Factory
+     * Compare file path from request with DB and set status.
      *
-     * @deprecated
-     * @return SampleFactory
+     * @param array $data
+     * @param string|null $file
+     * @return array
      */
-    private function getSampleFactory()
+    private function processFileStatus(array $data, ?string $file): array
     {
-        if (!$this->sampleFactory) {
-            $this->sampleFactory = ObjectManager::getInstance()->get(SampleFactory::class);
+        if (isset($data['type']) && $data['type'] === Download::LINK_TYPE_FILE && isset($data['file']['0']['file'])) {
+            if ($data['file'][0]['file'] !== $file) {
+                $data['file'][0]['status'] = 'new';
+            } else {
+                $data['file'][0]['status'] = 'old';
+            }
         }
 
-        return $this->sampleFactory;
+        return $data;
     }
 }

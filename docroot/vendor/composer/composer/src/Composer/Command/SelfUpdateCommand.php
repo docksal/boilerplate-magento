@@ -16,7 +16,8 @@ use Composer\Composer;
 use Composer\Factory;
 use Composer\Config;
 use Composer\Util\Filesystem;
-use Composer\Util\Keys;
+use Composer\SelfUpdate\Keys;
+use Composer\SelfUpdate\Versions;
 use Composer\IO\IOInterface;
 use Composer\Downloader\FilesystemException;
 use Symfony\Component\Console\Input\InputInterface;
@@ -47,13 +48,19 @@ class SelfUpdateCommand extends BaseCommand
                 new InputArgument('version', InputArgument::OPTIONAL, 'The version to update to'),
                 new InputOption('no-progress', null, InputOption::VALUE_NONE, 'Do not output download progress.'),
                 new InputOption('update-keys', null, InputOption::VALUE_NONE, 'Prompt user for a key update'),
+                new InputOption('stable', null, InputOption::VALUE_NONE, 'Force an update to the stable channel'),
+                new InputOption('preview', null, InputOption::VALUE_NONE, 'Force an update to the preview channel'),
+                new InputOption('snapshot', null, InputOption::VALUE_NONE, 'Force an update to the snapshot channel'),
+                new InputOption('set-channel-only', null, InputOption::VALUE_NONE, 'Only store the channel as the default one and then exit'),
             ))
-            ->setHelp(<<<EOT
+            ->setHelp(
+                <<<EOT
 The <info>self-update</info> command checks getcomposer.org for newer
 versions of composer and if found, installs the latest.
 
 <info>php composer.phar self-update</info>
 
+Read more at https://getcomposer.org/doc/03-cli.md#self-update-selfupdate-
 EOT
             )
         ;
@@ -72,6 +79,19 @@ EOT
         $io = $this->getIO();
         $remoteFilesystem = Factory::createRemoteFilesystem($io, $config);
 
+        $versionsUtil = new Versions($config, $remoteFilesystem);
+
+        // switch channel if requested
+        foreach (array('stable', 'preview', 'snapshot') as $channel) {
+            if ($input->getOption($channel)) {
+                $versionsUtil->setChannel($channel);
+            }
+        }
+
+        if ($input->getOption('set-channel-only')) {
+            return 0;
+        }
+
         $cacheDir = $config->get('cache-dir');
         $rollbackDir = $config->get('data-dir');
         $home = $config->get('home');
@@ -89,11 +109,21 @@ EOT
             throw new FilesystemException('Composer update failed: the "'.$tmpDir.'" directory used to download the temp file could not be written');
         }
 
+        // check if composer is running as the same user that owns the directory root, only if POSIX is defined and callable
+        if (function_exists('posix_getpwuid') && function_exists('posix_geteuid')) {
+            $composeUser = posix_getpwuid(posix_geteuid());
+            $homeOwner = posix_getpwuid(fileowner($home));
+            if (isset($composeUser['name']) && isset($homeOwner['name']) && $composeUser['name'] !== $homeOwner['name']) {
+                $io->writeError('<warning>You are running composer as "'.$composeUser['name'].'", while "'.$home.'" is owned by "'.$homeOwner['name'].'"</warning>');
+            }
+        }
+
         if ($input->getOption('rollback')) {
             return $this->rollback($output, $rollbackDir, $localFilename);
         }
 
-        $latestVersion = trim($remoteFilesystem->getContents(self::HOMEPAGE, $baseUrl. '/version', false));
+        $latest = $versionsUtil->getLatest();
+        $latestVersion = $latest['version'];
         $updateVersion = $input->getArgument('version') ?: $latestVersion;
 
         if (preg_match('{^[0-9a-f]{40}$}', $updateVersion) && $updateVersion !== $latestVersion) {
@@ -103,7 +133,12 @@ EOT
         }
 
         if (Composer::VERSION === $updateVersion) {
-            $io->writeError('<info>You are already using composer version '.$updateVersion.'.</info>');
+            $io->writeError(sprintf('<info>You are already using composer version %s (%s channel).</info>', $updateVersion, $versionsUtil->getChannel()));
+
+            // remove all backups except for the most recent, if any
+            if ($input->getOption('clean-backups')) {
+                $this->cleanBackups($rollbackDir, $this->getLastBackupVersion($rollbackDir));
+            }
 
             return 0;
         }
@@ -119,10 +154,13 @@ EOT
 
         $updatingToTag = !preg_match('{^[0-9a-f]{40}$}', $updateVersion);
 
-        $io->write(sprintf("Updating to version <info>%s</info>.", $updateVersion));
+        $io->write(sprintf("Updating to version <info>%s</info> (%s channel).", $updateVersion, $versionsUtil->getChannel()));
         $remoteFilename = $baseUrl . ($updatingToTag ? "/download/{$updateVersion}/composer.phar" : '/composer.phar');
         $signature = $remoteFilesystem->getContents(self::HOMEPAGE, $remoteFilename.'.sig', false);
+        $io->writeError('   ', false);
         $remoteFilesystem->copy(self::HOMEPAGE, $remoteFilename, $tempFilename, !$input->getOption('no-progress'));
+        $io->writeError('');
+
         if (!file_exists($tempFilename) || !$signature) {
             $io->writeError('<error>The download of the new composer version failed for an unexpected reason</error>');
 
@@ -140,7 +178,9 @@ EOT
 
             $sigFile = 'file://'.$home.'/' . ($updatingToTag ? 'keys.tags.pub' : 'keys.dev.pub');
             if (!file_exists($sigFile)) {
-                file_put_contents($home.'/keys.dev.pub', <<<DEVPUBKEY
+                file_put_contents(
+                    $home.'/keys.dev.pub',
+                    <<<DEVPUBKEY
 -----BEGIN PUBLIC KEY-----
 MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAnBDHjZS6e0ZMoK3xTD7f
 FNCzlXjX/Aie2dit8QXA03pSrOTbaMnxON3hUL47Lz3g1SC6YJEMVHr0zYq4elWi
@@ -156,8 +196,11 @@ r/TU7BQQIzsZgAiqOGXvVklIgAMiV0iucgf3rNBLjjeNEwNSTTG9F0CtQ+7JLwaE
 wSEuAuRm+pRqi8BRnQ/GKUcCAwEAAQ==
 -----END PUBLIC KEY-----
 DEVPUBKEY
-);
-                file_put_contents($home.'/keys.tags.pub', <<<TAGSPUBKEY
+                );
+
+                file_put_contents(
+                    $home.'/keys.tags.pub',
+                    <<<TAGSPUBKEY
 -----BEGIN PUBLIC KEY-----
 MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA0Vi/2K6apCVj76nCnCl2
 MQUPdK+A9eqkYBacXo2wQBYmyVlXm2/n/ZsX6pCLYPQTHyr5jXbkQzBw8SKqPdlh
@@ -173,12 +216,12 @@ TzCFWGk/HM6a4f0IzBWbJ5ot0PIi4amk07IotBXDWwqDiQTwyuGCym5EqWQ2BD95
 RGv89BPD+2DLnJysngsvVaUCAwEAAQ==
 -----END PUBLIC KEY-----
 TAGSPUBKEY
-);
+                );
             }
 
             $pubkeyid = openssl_pkey_get_public($sigFile);
             $algo = defined('OPENSSL_ALGO_SHA384') ? OPENSSL_ALGO_SHA384 : 'SHA384';
-            if (!in_array('SHA384', openssl_get_md_methods())) {
+            if (!in_array('sha384', array_map('strtolower', openssl_get_md_methods()))) {
                 throw new \RuntimeException('SHA384 is not supported by your openssl extension, could not verify the phar file integrity');
             }
             $signature = json_decode($signature, true);
@@ -192,17 +235,11 @@ TAGSPUBKEY
 
         // remove saved installations of composer
         if ($input->getOption('clean-backups')) {
-            $finder = $this->getOldInstallationFinder($rollbackDir);
-
-            $fs = new Filesystem;
-            foreach ($finder as $file) {
-                $file = (string) $file;
-                $io->writeError('<info>Removing: '.$file.'</info>');
-                $fs->remove($file);
-            }
+            $this->cleanBackups($rollbackDir);
         }
 
         if ($err = $this->setLocalPhar($localFilename, $tempFilename, $backupFile)) {
+            @unlink($tempFilename);
             $io->writeError('<error>The file is corrupted ('.$err->getMessage().').</error>');
             $io->writeError('<error>Please re-run the self-update command to try again.</error>');
 
@@ -210,10 +247,15 @@ TAGSPUBKEY
         }
 
         if (file_exists($backupFile)) {
-            $io->writeError('Use <info>composer self-update --rollback</info> to return to version '.Composer::VERSION);
+            $io->writeError(sprintf(
+                'Use <info>composer self-update --rollback</info> to return to version <comment>%s</comment>',
+                Composer::VERSION
+            ));
         } else {
             $io->writeError('<warning>A backup of the current version could not be written to '.$backupFile.', no rollback possible</warning>');
         }
+
+        return 0;
     }
 
     protected function fetchKeys(IOInterface $io, Config $config)
@@ -268,20 +310,19 @@ TAGSPUBKEY
             throw new \UnexpectedValueException('Composer rollback failed: no installation to roll back to in "'.$rollbackDir.'"');
         }
 
-        $old = $rollbackDir . '/' . $rollbackVersion . self::OLD_INSTALL_EXT;
+        $oldFile = $rollbackDir . '/' . $rollbackVersion . self::OLD_INSTALL_EXT;
 
-        if (!is_file($old)) {
-            throw new FilesystemException('Composer rollback failed: "'.$old.'" could not be found');
+        if (!is_file($oldFile)) {
+            throw new FilesystemException('Composer rollback failed: "'.$oldFile.'" could not be found');
         }
-        if (!is_readable($old)) {
-            throw new FilesystemException('Composer rollback failed: "'.$old.'" could not be read');
+        if (!is_readable($oldFile)) {
+            throw new FilesystemException('Composer rollback failed: "'.$oldFile.'" could not be read');
         }
 
-        $oldFile = $rollbackDir . "/{$rollbackVersion}" . self::OLD_INSTALL_EXT;
         $io = $this->getIO();
         $io->writeError(sprintf("Rolling back to version <info>%s</info>.", $rollbackVersion));
         if ($err = $this->setLocalPhar($localFilename, $oldFile)) {
-            $io->writeError('<error>The backup file was corrupted ('.$err->getMessage().') and has been removed.</error>');
+            $io->writeError('<error>The backup file was corrupted ('.$err->getMessage().').</error>');
 
             return 1;
         }
@@ -290,9 +331,11 @@ TAGSPUBKEY
     }
 
     /**
-     * @param string $localFilename
-     * @param string $newFilename
-     * @param string $backupTarget
+     * @param  string                                        $localFilename
+     * @param  string                                        $newFilename
+     * @param  string                                        $backupTarget
+     * @throws \Exception
+     * @return \UnexpectedValueException|\PharException|null
      */
     protected function setLocalPhar($localFilename, $newFilename, $backupTarget = null)
     {
@@ -311,15 +354,30 @@ TAGSPUBKEY
             }
 
             rename($newFilename, $localFilename);
+
+            return null;
         } catch (\Exception $e) {
-            if ($backupTarget) {
-                @unlink($newFilename);
-            }
             if (!$e instanceof \UnexpectedValueException && !$e instanceof \PharException) {
                 throw $e;
             }
 
             return $e;
+        }
+    }
+
+    protected function cleanBackups($rollbackDir, $except = null)
+    {
+        $finder = $this->getOldInstallationFinder($rollbackDir);
+        $io = $this->getIO();
+        $fs = new Filesystem;
+
+        foreach ($finder as $file) {
+            if ($except && $file->getBasename(self::OLD_INSTALL_EXT) === $except) {
+                continue;
+            }
+            $file = (string) $file;
+            $io->writeError('<info>Removing: '.$file.'</info>');
+            $fs->remove($file);
         }
     }
 

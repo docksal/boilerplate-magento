@@ -1,12 +1,18 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\Data\Test\Unit\Form\Element;
 
-class MultilineTest extends \PHPUnit_Framework_TestCase
+/**
+ * Test for \Magento\Framework\Data\Form\Element\Multiline
+ */
+class MultilineTest extends \PHPUnit\Framework\TestCase
 {
+    /** @var \Magento\Framework\TestFramework\Unit\Helper\ObjectManager */
+    private $objectManager;
+
     /**
      * @var \Magento\Framework\Data\Form\Element\Multiline
      */
@@ -29,17 +35,19 @@ class MultilineTest extends \PHPUnit_Framework_TestCase
 
     protected function setUp()
     {
-        $this->elementFactory = $this->getMockBuilder('Magento\Framework\Data\Form\Element\Factory')
+        $this->elementFactory = $this->getMockBuilder(\Magento\Framework\Data\Form\Element\Factory::class)
             ->disableOriginalConstructor()
             ->getMock();
 
-        $this->collectionFactory = $this->getMockBuilder('Magento\Framework\Data\Form\Element\CollectionFactory')
+        $this->collectionFactory = $this->getMockBuilder(\Magento\Framework\Data\Form\Element\CollectionFactory::class)
             ->disableOriginalConstructor()
             ->getMock();
 
-        $this->escaper = $this->getMockBuilder('Magento\Framework\Escaper')
-            ->disableOriginalConstructor()
-            ->getMock();
+        $this->objectManager = new \Magento\Framework\TestFramework\Unit\Helper\ObjectManager($this);
+
+        $this->escaper = $this->objectManager->getObject(
+            \Magento\Framework\Escaper::class
+        );
 
         $this->element = new \Magento\Framework\Data\Form\Element\Multiline(
             $this->elementFactory,

@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Checkout\Block\Onepage;
@@ -8,7 +8,9 @@ namespace Magento\Checkout\Block\Onepage;
 /**
  * One page checkout cart link
  *
+ * @api
  * @author      Magento Core Team <core@magentocommerce.com>
+ * @since 100.0.2
  */
 class Link extends \Magento\Framework\View\Element\Template
 {

@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\App\Config;
@@ -9,6 +9,7 @@ namespace Magento\Framework\App\Config;
  * Configuration data storage
  *
  * @api
+ * @since 100.0.2
  */
 interface DataInterface
 {

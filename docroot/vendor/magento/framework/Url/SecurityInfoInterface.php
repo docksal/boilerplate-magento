@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\Url;
@@ -9,6 +9,7 @@ namespace Magento\Framework\Url;
  * URL security information. Answers whether URL is secured.
  *
  * @api
+ * @since 100.0.2
  */
 interface SecurityInfoInterface
 {

@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Catalog\Model\ResourceModel\Product;
@@ -11,6 +11,9 @@ use Magento\Framework\App\ObjectManager;
 use Magento\Framework\DB\Select;
 use Magento\Store\Model\Store;
 
+/**
+ * Provide Select object for retrieve product id with minimal price.
+ */
 class LinkedProductSelectBuilderByBasePrice implements LinkedProductSelectBuilderInterface
 {
     /**
@@ -69,7 +72,7 @@ class LinkedProductSelectBuilderByBasePrice implements LinkedProductSelectBuilde
     }
 
     /**
-     * {@inheritdoc}
+     * @inheritdoc
      */
     public function build($productId)
     {
@@ -85,7 +88,7 @@ class LinkedProductSelectBuilderByBasePrice implements LinkedProductSelectBuilde
                 []
             )->joinInner(
                 [BaseSelectProcessorInterface::PRODUCT_TABLE_ALIAS => $productTable],
-                sprintf('%s.entity_id = link.child_id', BaseSelectProcessorInterface::PRODUCT_TABLE_ALIAS, $linkField),
+                sprintf('%s.entity_id = link.child_id', BaseSelectProcessorInterface::PRODUCT_TABLE_ALIAS),
                 ['entity_id']
             )->joinInner(
                 ['t' => $priceAttribute->getBackendTable()],
@@ -95,18 +98,19 @@ class LinkedProductSelectBuilderByBasePrice implements LinkedProductSelectBuilde
             ->where('t.attribute_id = ?', $priceAttribute->getAttributeId())
             ->where('t.value IS NOT NULL')
             ->order('t.value ' . Select::SQL_ASC)
+            ->order(BaseSelectProcessorInterface::PRODUCT_TABLE_ALIAS . '.' . $linkField . ' ' . Select::SQL_ASC)
             ->limit(1);
         $priceSelect = $this->baseSelectProcessor->process($priceSelect);
 
-        $priceSelectDefault = clone $priceSelect;
-        $priceSelectDefault->where('t.store_id = ?', Store::DEFAULT_STORE_ID);
-        $select[] = $priceSelectDefault;
-
         if (!$this->catalogHelper->isPriceGlobal()) {
-            $priceSelect->where('t.store_id = ?', $this->storeManager->getStore()->getId());
-            $select[] = $priceSelect;
+            $priceSelectStore = clone $priceSelect;
+            $priceSelectStore->where('t.store_id = ?', $this->storeManager->getStore()->getId());
+            $selects[] = $priceSelectStore;
         }
 
-        return $select;
+        $priceSelect->where('t.store_id = ?', Store::DEFAULT_STORE_ID);
+        $selects[] = $priceSelect;
+
+        return $selects;
     }
 }

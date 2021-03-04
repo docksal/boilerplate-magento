@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\DB\Tree;
@@ -8,26 +8,34 @@ namespace Magento\Framework\DB\Tree;
 /**
  * TODO implements iterators
  *
+ * @deprecated 102.0.0 Not used anymore.
  */
-class NodeSet implements \Iterator
+class NodeSet implements \Iterator, \Countable
 {
     /**
      * @var Node[]
      */
-    private $_nodes = [];
+    private $_nodes;
 
     /**
      * @var int
      */
-    private $_currentNode = 0;
+    private $_current;
 
     /**
      * @var int
      */
-    private $_current = 0;
+    private $_currentNode;
+
+    /**
+     * @var int
+     */
+    private $count;
 
     /**
      * Constructor
+     *
+     * @deprecated 102.0.0
      */
     public function __construct()
     {
@@ -40,6 +48,8 @@ class NodeSet implements \Iterator
     /**
      * @param Node $node
      * @return int
+     *
+     * @deprecated 102.0.0
      */
     public function addNode(Node $node)
     {
@@ -50,6 +60,8 @@ class NodeSet implements \Iterator
 
     /**
      * @return int
+     *
+     * @deprecated 102.0.0
      */
     public function count()
     {
@@ -58,6 +70,8 @@ class NodeSet implements \Iterator
 
     /**
      * @return bool
+     *
+     * @deprecated 102.0.0
      */
     public function valid()
     {
@@ -66,6 +80,8 @@ class NodeSet implements \Iterator
 
     /**
      * @return false|int
+     *
+     * @deprecated 102.0.0
      */
     public function next()
     {
@@ -78,6 +94,8 @@ class NodeSet implements \Iterator
 
     /**
      * @return int
+     *
+     * @deprecated 102.0.0
      */
     public function key()
     {
@@ -86,6 +104,8 @@ class NodeSet implements \Iterator
 
     /**
      * @return Node
+     *
+     * @deprecated 102.0.0
      */
     public function current()
     {
@@ -94,6 +114,8 @@ class NodeSet implements \Iterator
 
     /**
      * @return void
+     *
+     * @deprecated 102.0.0
      */
     public function rewind()
     {

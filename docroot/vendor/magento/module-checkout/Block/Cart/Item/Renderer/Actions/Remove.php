@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Checkout\Block\Cart\Item\Renderer\Actions;
@@ -8,6 +8,10 @@ namespace Magento\Checkout\Block\Cart\Item\Renderer\Actions;
 use Magento\Checkout\Helper\Cart;
 use Magento\Framework\View\Element\Template;
 
+/**
+ * @api
+ * @since 100.0.2
+ */
 class Remove extends Generic
 {
     /**

@@ -1,7 +1,7 @@
 <?php
 /**
  *
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -13,6 +13,8 @@ use Magento\Framework\Exception\StateException;
 use Magento\Catalog\Api\Data\CategoryInterface;
 
 /**
+ * Repository for categories.
+ *
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  */
 class CategoryRepository implements \Magento\Catalog\Api\CategoryRepositoryInterface
@@ -70,13 +72,13 @@ class CategoryRepository implements \Magento\Catalog\Api\CategoryRepositoryInter
     }
 
     /**
-     * {@inheritdoc}
+     * @inheritdoc
      */
     public function save(\Magento\Catalog\Api\Data\CategoryInterface $category)
     {
         $storeId = (int)$this->storeManager->getStore()->getId();
         $existingData = $this->getExtensibleDataObjectConverter()
-            ->toNestedArray($category, [], 'Magento\Catalog\Api\Data\CategoryInterface');
+            ->toNestedArray($category, [], \Magento\Catalog\Api\Data\CategoryInterface::class);
         $existingData = array_diff_key($existingData, array_flip(['path', 'level', 'parent_id']));
         $existingData['store_id'] = $storeId;
 
@@ -125,11 +127,11 @@ class CategoryRepository implements \Magento\Catalog\Api\CategoryRepositoryInter
     }
 
     /**
-     * {@inheritdoc}
+     * @inheritdoc
      */
     public function get($categoryId, $storeId = null)
     {
-        $cacheKey = null !== $storeId ? $storeId : 'all';
+        $cacheKey = $storeId ?? 'all';
         if (!isset($this->instances[$categoryId][$cacheKey])) {
             /** @var Category $category */
             $category = $this->categoryFactory->create();
@@ -146,7 +148,7 @@ class CategoryRepository implements \Magento\Catalog\Api\CategoryRepositoryInter
     }
 
     /**
-     * {@inheritdoc}
+     * @inheritdoc
      */
     public function delete(\Magento\Catalog\Api\Data\CategoryInterface $category)
     {
@@ -167,7 +169,7 @@ class CategoryRepository implements \Magento\Catalog\Api\CategoryRepositoryInter
     }
 
     /**
-     * {@inheritdoc}
+     * @inheritdoc
      */
     public function deleteByIdentifier($categoryId)
     {
@@ -197,7 +199,7 @@ class CategoryRepository implements \Magento\Catalog\Api\CategoryRepositoryInter
                 if ($error === true) {
                     $attribute = $this->categoryResource->getAttribute($code)->getFrontend()->getLabel();
                     throw new \Magento\Framework\Exception\LocalizedException(
-                        __('Attribute "%1" is required.', $attribute)
+                        __('The "%1" attribute is required. Enter and try again.', $attribute)
                     );
                 } else {
                     throw new \Magento\Framework\Exception\LocalizedException(__($error));
@@ -208,27 +210,31 @@ class CategoryRepository implements \Magento\Catalog\Api\CategoryRepositoryInter
     }
 
     /**
+     * Lazy loader for the converter.
+     *
      * @return \Magento\Framework\Api\ExtensibleDataObjectConverter
      *
-     * @deprecated
+     * @deprecated 101.0.0
      */
     private function getExtensibleDataObjectConverter()
     {
         if ($this->extensibleDataObjectConverter === null) {
             $this->extensibleDataObjectConverter = \Magento\Framework\App\ObjectManager::getInstance()
-                ->get('Magento\Framework\Api\ExtensibleDataObjectConverter');
+                ->get(\Magento\Framework\Api\ExtensibleDataObjectConverter::class);
         }
         return $this->extensibleDataObjectConverter;
     }
 
     /**
+     * Lazy loader for the metadata pool.
+     *
      * @return \Magento\Framework\EntityManager\MetadataPool
      */
     private function getMetadataPool()
     {
         if (null === $this->metadataPool) {
             $this->metadataPool = \Magento\Framework\App\ObjectManager::getInstance()
-                ->get('Magento\Framework\EntityManager\MetadataPool');
+                ->get(\Magento\Framework\EntityManager\MetadataPool::class);
         }
         return $this->metadataPool;
     }

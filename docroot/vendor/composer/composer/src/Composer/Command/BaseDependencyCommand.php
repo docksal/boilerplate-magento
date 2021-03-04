@@ -18,6 +18,7 @@ use Composer\Package\PackageInterface;
 use Composer\Repository\ArrayRepository;
 use Composer\Repository\CompositeRepository;
 use Composer\Repository\PlatformRepository;
+use Composer\Repository\RepositoryFactory;
 use Composer\Plugin\CommandEvent;
 use Composer\Plugin\PluginEvents;
 use Symfony\Component\Console\Formatter\OutputFormatterStyle;
@@ -61,7 +62,7 @@ class BaseDependencyCommand extends BaseCommand
      * @param  InputInterface  $input
      * @param  OutputInterface $output
      * @param  bool            $inverted Whether to invert matching process (why-not vs why behaviour)
-     * @return int|null        Exit code of the operation.
+     * @return int             Exit code of the operation.
      */
     protected function doExecute(InputInterface $input, OutputInterface $output, $inverted = false)
     {
@@ -88,9 +89,18 @@ class BaseDependencyCommand extends BaseCommand
         );
 
         // Find packages that are or provide the requested package first
-        $packages = $pool->whatProvides($needle);
+        $packages = $pool->whatProvides(strtolower($needle));
         if (empty($packages)) {
             throw new \InvalidArgumentException(sprintf('Could not find package "%s" in your project', $needle));
+        }
+
+        // If the version we ask for is not installed then we need to locate it in remote repos and add it.
+        // This is needed for why-not to resolve conflicts from an uninstalled version against installed packages.
+        if (!$repository->findPackage($needle, $textConstraint)) {
+            $defaultRepos = new CompositeRepository(RepositoryFactory::defaultRepos($this->getIO()));
+            if ($match = $defaultRepos->findPackage($needle, $textConstraint)) {
+                $repository->addRepository(new ArrayRepository(array(clone $match)));
+            }
         }
 
         // Include replaced packages for inverted lookups as they are then the actual starting point to consider
@@ -119,8 +129,11 @@ class BaseDependencyCommand extends BaseCommand
         $results = $repository->getDependents($needles, $constraint, $inverted, $recursive);
         if (empty($results)) {
             $extra = (null !== $constraint) ? sprintf(' in versions %smatching %s', $inverted ? 'not ' : '', $textConstraint) : '';
-            $this->getIO()->writeError(sprintf('<info>There is no installed package depending on "%s"%s</info>',
-                $needle, $extra));
+            $this->getIO()->writeError(sprintf(
+                '<info>There is no installed package depending on "%s"%s</info>',
+                $needle,
+                $extra
+            ));
         } elseif ($renderTree) {
             $this->initStyles($output);
             $root = $packages[0];
@@ -159,7 +172,9 @@ class BaseDependencyCommand extends BaseCommand
                 $doubles[$unique] = true;
                 $version = (strpos($package->getPrettyVersion(), 'No version set') === 0) ? '-' : $package->getPrettyVersion();
                 $rows[] = array($package->getPrettyName(), $version, $link->getDescription(), sprintf('%s (%s)', $link->getTarget(), $link->getPrettyConstraint()));
-                $queue = array_merge($queue, $children);
+                if ($children) {
+                    $queue = array_merge($queue, $children);
+                }
             }
             $results = $queue;
             $table = array_merge($rows, $table);
@@ -168,8 +183,9 @@ class BaseDependencyCommand extends BaseCommand
         // Render table
         $renderer = new Table($output);
         $renderer->setStyle('compact');
-        $renderer->getStyle()->setVerticalBorderChar('');
-        $renderer->getStyle()->setCellRowContentFormat('%s  ');
+        $rendererStyle = $renderer->getStyle();
+        $rendererStyle->setVerticalBorderChar('');
+        $rendererStyle->setCellRowContentFormat('%s  ');
         $renderer->setRows($table)->render();
     }
 
@@ -197,17 +213,19 @@ class BaseDependencyCommand extends BaseCommand
     /**
      * Recursively prints a tree of the selected results.
      *
-     * @param array  $results
-     * @param string $prefix
+     * @param array  $results Results to be printed at this level.
+     * @param string $prefix  Prefix of the current tree level.
+     * @param int    $level   Current level of recursion.
      */
     protected function printTree($results, $prefix = '', $level = 1)
     {
         $count = count($results);
         $idx = 0;
-        foreach ($results as $key => $result) {
+        foreach ($results as $result) {
             /**
              * @var PackageInterface $package
              * @var Link             $link
+             * @var array|bool       $children
              */
             list($package, $link, $children) = $result;
 

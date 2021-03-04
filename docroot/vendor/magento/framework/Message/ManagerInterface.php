@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\Message;
@@ -9,6 +9,7 @@ namespace Magento\Framework\Message;
  * Adds different types of messages to the session, and allows access to existing messages.
  *
  * @api
+ * @since 100.0.2
  */
 interface ManagerInterface
 {
@@ -52,7 +53,7 @@ interface ManagerInterface
      * @param string $message
      * @param string|null $group
      * @return ManagerInterface
-     * @deprecated
+     * @deprecated 100.1.0
      * @see \Magento\Framework\Message\ManagerInterface::addErrorMessage
      */
     public function addError($message, $group = null);
@@ -63,7 +64,7 @@ interface ManagerInterface
      * @param string $message
      * @param string|null $group
      * @return ManagerInterface
-     * @deprecated
+     * @deprecated 100.1.0
      * @see \Magento\Framework\Message\ManagerInterface::addWarningMessage
      */
     public function addWarning($message, $group = null);
@@ -74,7 +75,7 @@ interface ManagerInterface
      * @param string $message
      * @param string|null $group
      * @return ManagerInterface
-     * @deprecated
+     * @deprecated 100.1.0
      * @see \Magento\Framework\Message\ManagerInterface::addNoticeMessage
      */
     public function addNotice($message, $group = null);
@@ -85,7 +86,7 @@ interface ManagerInterface
      * @param string $message
      * @param string|null $group
      * @return ManagerInterface
-     * @deprecated
+     * @deprecated 100.1.0
      * @see \Magento\Framework\Message\ManagerInterface::addSuccessMessage
      */
     public function addSuccess($message, $group = null);
@@ -179,23 +180,23 @@ interface ManagerInterface
      * Adds a message describing an exception. Does not contain Exception handling logic.
      *
      * @param \Exception $exception
-     * @param string $alternativeText
+     * @param string|null $alternativeText
      * @param string|null $group
      * @return ManagerInterface
-     * @deprecated
+     * @deprecated 100.1.0
      * @see \Magento\Framework\Message\ManagerInterface::addExceptionMessage
      */
-    public function addException(\Exception $exception, $alternativeText, $group = null);
+    public function addException(\Exception $exception, $alternativeText = null, $group = null);
 
     /**
      * Adds a message describing an exception. Does not contain Exception handling logic.
      *
      * @param \Exception $exception
-     * @param string $alternativeText
+     * @param string|null $alternativeText
      * @param string|null $group
      * @return ManagerInterface
      */
-    public function addExceptionMessage(\Exception $exception, $alternativeText, $group = null);
+    public function addExceptionMessage(\Exception $exception, $alternativeText = null, $group = null);
 
     /**
      * Creates identified message

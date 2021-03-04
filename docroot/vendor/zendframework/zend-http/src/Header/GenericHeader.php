@@ -1,42 +1,38 @@
 <?php
 /**
- * Zend Framework (http://framework.zend.com/)
- *
- * @link      http://github.com/zendframework/zf2 for the canonical source repository
- * @copyright Copyright (c) 2005-2015 Zend Technologies USA Inc. (http://www.zend.com)
- * @license   http://framework.zend.com/license/new-bsd New BSD License
+ * @see       https://github.com/zendframework/zend-http for the canonical source repository
+ * @copyright Copyright (c) 2005-2017 Zend Technologies USA Inc. (http://www.zend.com)
+ * @license   https://github.com/zendframework/zend-http/blob/master/LICENSE.md New BSD License
  */
 
 namespace Zend\Http\Header;
 
 /**
  * Content-Location Header
- *
-  */
+ */
 class GenericHeader implements HeaderInterface
 {
     /**
      * @var string
      */
-    protected $fieldName = null;
+    protected $fieldName;
 
     /**
      * @var string
      */
-    protected $fieldValue = null;
+    protected $fieldValue;
 
     /**
      * Factory to generate a header object from a string
      *
-     * @static
      * @param string $headerLine
-     * @return GenericHeader
+     * @return static
      */
     public static function fromString($headerLine)
     {
         list($fieldName, $fieldValue) = GenericHeader::splitHeaderLine($headerLine);
-        $header = new static($fieldName, $fieldValue);
-        return $header;
+
+        return new static($fieldName, $fieldValue);
     }
 
     /**
@@ -83,12 +79,12 @@ class GenericHeader implements HeaderInterface
      * Set header field name
      *
      * @param  string $fieldName
-     * @return GenericHeader
+     * @return $this
      * @throws Exception\InvalidArgumentException If the name does not match with RFC 2616 format.
      */
     public function setFieldName($fieldName)
     {
-        if (!is_string($fieldName) || empty($fieldName)) {
+        if (! is_string($fieldName) || empty($fieldName)) {
             throw new Exception\InvalidArgumentException('Header name must be a string');
         }
 
@@ -101,7 +97,7 @@ class GenericHeader implements HeaderInterface
          * tchar        = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
          *                "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
          */
-        if (!preg_match('/^[!#$%&\'*+\-\.\^_`|~0-9a-zA-Z]+$/', $fieldName)) {
+        if (! preg_match('/^[!#$%&\'*+\-\.\^_`|~0-9a-zA-Z]+$/', $fieldName)) {
             throw new Exception\InvalidArgumentException(
                 'Header name must be a valid RFC 7230 (section 3.2) field-name.'
             );
@@ -125,7 +121,7 @@ class GenericHeader implements HeaderInterface
      * Set header field value
      *
      * @param  string $fieldValue
-     * @return GenericHeader
+     * @return $this
      */
     public function setFieldValue($fieldValue)
     {

@@ -1,10 +1,8 @@
 <?php
 /**
- * Zend Framework (http://framework.zend.com/)
- *
- * @link      http://github.com/zendframework/zf2 for the canonical source repository
- * @copyright Copyright (c) 2005-2015 Zend Technologies USA Inc. (http://www.zend.com)
- * @license   http://framework.zend.com/license/new-bsd New BSD License
+ * @see       https://github.com/zendframework/zend-http for the canonical source repository
+ * @copyright Copyright (c) 2005-2017 Zend Technologies USA Inc. (http://www.zend.com)
+ * @license   https://github.com/zendframework/zend-http/blob/master/LICENSE.md New BSD License
  */
 
 namespace Zend\Http\Header;
@@ -28,7 +26,7 @@ class RetryAfter extends AbstractDate
      * Create Retry-After header from string
      *
      * @param  string $headerLine
-     * @return RetryAfter
+     * @return static
      * @throws Exception\InvalidArgumentException
      */
     public static function fromString($headerLine)
@@ -57,7 +55,7 @@ class RetryAfter extends AbstractDate
      * Set number of seconds
      *
      * @param int $delta
-     * @return RetryAfter
+     * @return $this
      */
     public function setDeltaSeconds($delta)
     {

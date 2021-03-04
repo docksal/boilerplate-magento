@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -10,7 +10,10 @@ use Magento\Framework\Api\AbstractSimpleObject;
 
 /**
  * Filter which can be used by any methods from service layer.
+ *
+ * @api
  * @codeCoverageIgnore
+ * @since 100.0.2
  */
 class Filter extends AbstractSimpleObject
 {

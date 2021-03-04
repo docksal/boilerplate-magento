@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Framework\DB;
@@ -11,6 +11,7 @@ use Magento\Framework\DB\Adapter\AdapterInterface;
 /**
  * Class for SQL SELECT generation and results.
  *
+ * @api
  * @method \Magento\Framework\DB\Select from($name, $cols = '*', $schema = null)
  * @method \Magento\Framework\DB\Select join($name, $cond, $cols = '*', $schema = null)
  * @method \Magento\Framework\DB\Select joinInner($name, $cond, $cols = '*', $schema = null)
@@ -27,8 +28,7 @@ use Magento\Framework\DB\Adapter\AdapterInterface;
  * @method \Magento\Framework\DB\Select distinct($flag = true)
  * @method \Magento\Framework\DB\Select reset($part = null)
  * @method \Magento\Framework\DB\Select columns($cols = '*', $correlationName = null)
- *
- * @author      Magento Core Team <core@magentocommerce.com>
+ * @since 100.0.2
  */
 class Select extends \Zend_Db_Select
 {
@@ -435,7 +435,7 @@ class Select extends \Zend_Db_Select
             }
         }
 
-        return parent::_tableCols($correlationName, $cols, $afterCorrelationName);
+        parent::_tableCols($correlationName, $cols, $afterCorrelationName);
     }
 
     /**
@@ -468,9 +468,9 @@ class Select extends \Zend_Db_Select
     /**
      * Add EXISTS clause
      *
-     * @param  Select $select
-     * @param  string           $joinCondition
-     * @param   bool            $isExists
+     * @param Select $select
+     * @param string $joinCondition
+     * @param bool $isExists
      * @return $this
      */
     public function exists($select, $joinCondition, $isExists = true)
@@ -502,6 +502,7 @@ class Select extends \Zend_Db_Select
      * Converts this object to an SQL SELECT string.
      *
      * @return string|null This object as a SELECT string. (or null if a string cannot be produced.)
+     * @since 100.1.0
      */
     public function assemble()
     {
@@ -509,7 +510,10 @@ class Select extends \Zend_Db_Select
     }
 
     /**
+     * Sleep magic method.
+     *
      * @return string[]
+     * @since 100.0.11
      */
     public function __sleep()
     {
@@ -528,6 +532,7 @@ class Select extends \Zend_Db_Select
      * Init not serializable fields
      *
      * @return void
+     * @since 100.0.11
      */
     public function __wakeup()
     {

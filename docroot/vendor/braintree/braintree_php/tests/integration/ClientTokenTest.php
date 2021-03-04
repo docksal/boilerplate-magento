@@ -169,12 +169,13 @@ class ClientTokenTest extends Setup
 
     public function test_ClientTokenAcceptsMerchantAccountId()
     {
+        $expectedMerchantAccountId = Test\Helper::nonDefaultMerchantAccountId();
         $clientToken = Test\Helper::decodedClientToken([
-            'merchantAccountId' => 'my_merchant_account'
+            'merchantAccountId' => $expectedMerchantAccountId
         ]);
         $merchantAccountId = json_decode($clientToken)->merchantAccountId;
 
-        $this->assertEquals('my_merchant_account', $merchantAccountId);
+        $this->assertEquals($expectedMerchantAccountId, $merchantAccountId);
     }
 
     public function test_GenerateRaisesExceptionOnGateway422()
@@ -183,6 +184,15 @@ class ClientTokenTest extends Setup
 
         Braintree\ClientToken::generate([
             "customerId" => "not_a_customer"
+        ]);
+    }
+
+    public function test_ClientTokenRejectsSepaParams()
+    {
+        $this->setExpectedException('InvalidArgumentException', 'sepaMandateType');
+
+        Braintree\ClientToken::generate([
+           "sepaMandateType" => "Business"
         ]);
     }
 }

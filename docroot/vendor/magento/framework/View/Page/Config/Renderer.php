@@ -1,10 +1,12 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
+
 namespace Magento\Framework\View\Page\Config;
 
+use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\View\Asset\GroupedCollection;
 use Magento\Framework\View\Page\Config;
 
@@ -18,10 +20,32 @@ class Renderer implements RendererInterface
     /**
      * @var array
      */
-    protected $assetTypeOrder = ['css', 'ico', 'js'];
+    protected $assetTypeOrder = [
+        'css',
+        'ico',
+        'js',
+        'eot',
+        'svg',
+        'ttf',
+        'woff',
+        'woff2',
+    ];
 
     /**
-     * @var \Magento\Framework\View\Page\Config
+     * Possible fonts type
+     *
+     * @var array
+     */
+    private const FONTS_TYPE = [
+        'eot',
+        'svg',
+        'ttf',
+        'woff',
+        'woff2',
+    ];
+
+    /**
+     * @var Config
      */
     protected $pageConfig;
 
@@ -51,7 +75,7 @@ class Renderer implements RendererInterface
     protected $urlBuilder;
 
     /**
-     * @param \Magento\Framework\View\Page\Config $pageConfig
+     * @param Config $pageConfig
      * @param \Magento\Framework\View\Asset\MergeService $assetMergeService
      * @param \Magento\Framework\UrlInterface $urlBuilder
      * @param \Magento\Framework\Escaper $escaper
@@ -75,6 +99,8 @@ class Renderer implements RendererInterface
     }
 
     /**
+     * Render element attributes
+     *
      * @param string $elementType
      * @return string
      */
@@ -88,6 +114,8 @@ class Renderer implements RendererInterface
     }
 
     /**
+     * Render head content
+     *
      * @return string
      */
     public function renderHeadContent()
@@ -102,6 +130,8 @@ class Renderer implements RendererInterface
     }
 
     /**
+     * Render title
+     *
      * @return string
      */
     public function renderTitle()
@@ -110,6 +140,8 @@ class Renderer implements RendererInterface
     }
 
     /**
+     * Render metadata
+     *
      * @return string
      */
     public function renderMetadata()
@@ -129,6 +161,8 @@ class Renderer implements RendererInterface
     }
 
     /**
+     * Process metadata content
+     *
      * @param string $name
      * @param string $content
      * @return mixed
@@ -136,6 +170,12 @@ class Renderer implements RendererInterface
     protected function processMetadataContent($name, $content)
     {
         $method = 'get' . $this->string->upperCaseWords($name, '_', '');
+        if ($name === 'title') {
+            if (!$content) {
+                $content = $this->escaper->escapeHtml($this->pageConfig->$method()->get());
+            }
+            return $content;
+        }
         if (method_exists($this->pageConfig, $method)) {
             $content = $this->pageConfig->$method();
         }
@@ -143,6 +183,8 @@ class Renderer implements RendererInterface
     }
 
     /**
+     * Returns metadata template
+     *
      * @param string $name
      * @return bool|string
      */
@@ -153,19 +195,19 @@ class Renderer implements RendererInterface
         }
 
         switch ($name) {
-            case 'charset':
+            case Config::META_CHARSET:
                 $metadataTemplate = '<meta charset="%content"/>' . "\n";
                 break;
 
-            case 'content_type':
+            case Config::META_CONTENT_TYPE:
                 $metadataTemplate = '<meta http-equiv="Content-Type" content="%content"/>' . "\n";
                 break;
 
-            case 'x_ua_compatible':
+            case Config::META_X_UI_COMPATIBLE:
                 $metadataTemplate = '<meta http-equiv="X-UA-Compatible" content="%content"/>' . "\n";
                 break;
 
-            case 'media_type':
+            case Config::META_MEDIA_TYPE:
                 $metadataTemplate = false;
                 break;
 
@@ -177,6 +219,8 @@ class Renderer implements RendererInterface
     }
 
     /**
+     * Favicon preparation
+     *
      * @return void
      */
     public function prepareFavicon()
@@ -236,24 +280,14 @@ class Renderer implements RendererInterface
      */
     protected function renderAssetGroup(\Magento\Framework\View\Asset\PropertyGroup $group)
     {
-        $groupAssets = $this->processMerge($group->getAll(), $group);
-
-        $attributes = $this->getGroupAttributes($group);
-        $attributes = $this->addDefaultAttributes(
-            $group->getProperty(GroupedCollection::PROPERTY_CONTENT_TYPE),
-            $attributes
-        );
-
-        $groupTemplate = $this->getAssetTemplate(
-            $group->getProperty(GroupedCollection::PROPERTY_CONTENT_TYPE),
-            $attributes
-        );
-        $groupHtml = $this->renderAssetHtml($groupTemplate, $groupAssets);
+        $groupHtml = $this->renderAssetHtml($group);
         $groupHtml = $this->processIeCondition($groupHtml, $group);
         return $groupHtml;
     }
 
     /**
+     * Process assets merge
+     *
      * @param array $groupAssets
      * @param \Magento\Framework\View\Asset\PropertyGroup $group
      * @return array
@@ -270,6 +304,8 @@ class Renderer implements RendererInterface
     }
 
     /**
+     * Returns group attributes
+     *
      * @param \Magento\Framework\View\Asset\PropertyGroup $group
      * @return string|null
      */
@@ -291,6 +327,8 @@ class Renderer implements RendererInterface
     }
 
     /**
+     * Add default attributes
+     *
      * @param string $contentType
      * @param string $attributes
      * @return string
@@ -305,11 +343,17 @@ class Renderer implements RendererInterface
             case 'css':
                 $attributes = ' rel="stylesheet" type="text/css" ' . ($attributes ?: ' media="all"');
                 break;
+
+            case $this->canTypeBeFont($contentType):
+                $attributes = 'rel="preload" as="font" crossorigin="anonymous"';
+                break;
         }
         return $attributes;
     }
 
     /**
+     * Returns assets template
+     *
      * @param string $contentType
      * @param string|null $attributes
      * @return string
@@ -330,6 +374,8 @@ class Renderer implements RendererInterface
     }
 
     /**
+     * Process IE condition
+     *
      * @param string $groupHtml
      * @param \Magento\Framework\View\Asset\PropertyGroup $group
      * @return string
@@ -346,19 +392,25 @@ class Renderer implements RendererInterface
     /**
      * Render HTML tags referencing corresponding URLs
      *
-     * @param string $template
-     * @param array $assets
+     * @param \Magento\Framework\View\Asset\PropertyGroup $group
      * @return string
      */
-    protected function renderAssetHtml($template, $assets)
+    protected function renderAssetHtml(\Magento\Framework\View\Asset\PropertyGroup $group)
     {
+        $assets = $this->processMerge($group->getAll(), $group);
+        $attributes = $this->getGroupAttributes($group);
+
         $result = '';
         try {
             /** @var $asset \Magento\Framework\View\Asset\AssetInterface */
             foreach ($assets as $asset) {
+                $template = $this->getAssetTemplate(
+                    $group->getProperty(GroupedCollection::PROPERTY_CONTENT_TYPE),
+                    $this->addDefaultAttributes($this->getAssetContentType($asset), $attributes)
+                );
                 $result .= sprintf($template, $asset->getUrl());
             }
-        } catch (\Magento\Framework\Exception\LocalizedException $e) {
+        } catch (LocalizedException $e) {
             $this->logger->critical($e);
             $result .= sprintf($template, $this->urlBuilder->getUrl('', ['_direct' => 'core/index/notFound']));
         }
@@ -366,6 +418,30 @@ class Renderer implements RendererInterface
     }
 
     /**
+     * Check if file type can be font
+     *
+     * @param string $type
+     * @return bool
+     */
+    private function canTypeBeFont(string $type): bool
+    {
+        return in_array($type, self::FONTS_TYPE, true);
+    }
+
+    /**
+     * Get asset content type
+     *
+     * @param \Magento\Framework\View\Asset\AssetInterface $asset
+     * @return string
+     */
+    protected function getAssetContentType(\Magento\Framework\View\Asset\AssetInterface $asset)
+    {
+        return $asset->getContentType();
+    }
+
+    /**
+     * Returns available groups.
+     *
      * @return array
      */
     public function getAvailableResultGroups()

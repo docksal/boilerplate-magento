@@ -1,12 +1,15 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
 namespace Magento\Wishlist\Test\Unit\Controller\Index;
 
-class PluginTest extends \PHPUnit_Framework_TestCase
+/**
+ * Test for wishlist plugin before dispatch
+ */
+class PluginTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var \Magento\Customer\Model\Session|\PHPUnit_Framework_MockObject_MockObject
@@ -29,33 +32,46 @@ class PluginTest extends \PHPUnit_Framework_TestCase
     protected $redirector;
 
     /**
+     * @var \Magento\Framework\Message\ManagerInterface|\PHPUnit_Framework_MockObject_MockObject
+     */
+    protected $messageManager;
+
+    /**
      * @var \Magento\Framework\App\Request\Http|\PHPUnit_Framework_MockObject_MockObject
      */
     protected $request;
 
+    /**
+     * @inheritdoc
+     */
     protected function setUp()
     {
-        $this->customerSession = $this->getMockBuilder('Magento\Customer\Model\Session')
+        $this->customerSession = $this->getMockBuilder(\Magento\Customer\Model\Session::class)
             ->disableOriginalConstructor()
-            ->setMethods([
-                'authenticate',
-                'getBeforeWishlistUrl',
-                'setBeforeWishlistUrl',
-                'setBeforeWishlistRequest',
-                'getBeforeWishlistRequest',
-                'setBeforeRequestParams',
-                'setBeforeModuleName',
-                'setBeforeControllerName',
-                'setBeforeAction',
-            ])
-            ->getMock();
+            ->setMethods(
+                [
+                    'authenticate',
+                    'getBeforeWishlistUrl',
+                    'setBeforeWishlistUrl',
+                    'setBeforeWishlistRequest',
+                    'getBeforeWishlistRequest',
+                    'setBeforeRequestParams',
+                    'setBeforeModuleName',
+                    'setBeforeControllerName',
+                    'setBeforeAction',
+                ]
+            )->getMock();
 
-        $this->authenticationState = $this->getMock('Magento\Wishlist\Model\AuthenticationState', [], [], '', false);
-        $this->config = $this->getMock('Magento\Framework\App\Config', [], [], '', false);
-        $this->redirector = $this->getMock('\Magento\Store\App\Response\Redirect', [], [], '', false);
-        $this->request = $this->getMock('Magento\Framework\App\Request\Http', [], [], '', false);
+        $this->authenticationState = $this->createMock(\Magento\Wishlist\Model\AuthenticationState::class);
+        $this->config = $this->createMock(\Magento\Framework\App\Config::class);
+        $this->redirector = $this->createMock(\Magento\Store\App\Response\Redirect::class);
+        $this->messageManager = $this->createMock(\Magento\Framework\Message\ManagerInterface::class);
+        $this->request = $this->createMock(\Magento\Framework\App\Request\Http::class);
     }
 
+    /**
+     * @inheritdoc
+     */
     protected function tearDown()
     {
         unset(
@@ -63,17 +79,22 @@ class PluginTest extends \PHPUnit_Framework_TestCase
             $this->authenticationState,
             $this->config,
             $this->redirector,
+            $this->messageManager,
             $this->request
         );
     }
 
+    /**
+     * @return \Magento\Wishlist\Controller\Index\Plugin
+     */
     protected function getPlugin()
     {
         return new \Magento\Wishlist\Controller\Index\Plugin(
             $this->customerSession,
             $this->authenticationState,
             $this->config,
-            $this->redirector
+            $this->redirector,
+            $this->messageManager
         );
     }
 
@@ -85,10 +106,11 @@ class PluginTest extends \PHPUnit_Framework_TestCase
         $refererUrl = 'http://referer-url.com';
         $params = [
             'product' => 1,
+            'login' => [],
         ];
 
-        $actionFlag = $this->getMock('Magento\Framework\App\ActionFlag', [], [], '', false);
-        $indexController = $this->getMock('Magento\Wishlist\Controller\Index\Index', [], [], '', false);
+        $actionFlag = $this->createMock(\Magento\Framework\App\ActionFlag::class);
+        $indexController = $this->createMock(\Magento\Wishlist\Controller\Index\Index::class);
 
         $actionFlag
             ->expects($this->once())
@@ -128,7 +150,7 @@ class PluginTest extends \PHPUnit_Framework_TestCase
             ->willReturnSelf();
         $this->customerSession->expects($this->once())
             ->method('setBeforeWishlistRequest')
-            ->with($params)
+            ->with(['product' => 1])
             ->willReturnSelf();
         $this->customerSession->expects($this->once())
             ->method('getBeforeWishlistRequest')

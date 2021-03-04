@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 
@@ -10,6 +10,9 @@ use Magento\Framework\Config\ConfigOptionsListConstants;
 
 /**
  * Application deployment configuration
+ *
+ * @api
+ * @since 100.0.2
  */
 class DeploymentConfig
 {
@@ -68,7 +71,12 @@ class DeploymentConfig
         if ($key === null) {
             return $this->flatData;
         }
-        return isset($this->flatData[$key]) ? $this->flatData[$key] : $defaultValue;
+
+        if (array_key_exists($key, $this->flatData) && $this->flatData[$key] === null) {
+            return '';
+        }
+
+        return $this->flatData[$key] ?? $defaultValue;
     }
 
     /**
@@ -115,9 +123,10 @@ class DeploymentConfig
     }
 
     /**
-     * Check if data from deploy files is avaiable
+     * Check if data from deploy files is available
      *
      * @return bool
+     * @since 100.1.3
      */
     public function isDbAvailable()
     {
@@ -143,6 +152,8 @@ class DeploymentConfig
     }
 
     /**
+     * Array keys conversion
+     *
      * Convert associative array of arbitrary depth to a flat associative array with concatenated key path as keys
      * each level of array is accessible by path key
      *

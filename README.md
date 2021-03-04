@@ -20,13 +20,13 @@ Follow [Docksal environment setup instructions](http://docksal.readthedocs.io/en
 1. Clone this repo into your Projects directory
 
     ```
-    git clone https://github.com/docksal/vanilla-magento.git
-    cd vanilla-magento
+    git clone https://github.com/docksal/boilerplate-magento.git
+    cd boilerplate-magento
     ```
 
 2. Initialize the site
 
-    This will create administrator and install the site with `php ./magento setup:install` 
+    This will create administrator and install the site with `php bin/magento setup:install` 
 
     ```
     fin init
@@ -35,15 +35,16 @@ Follow [Docksal environment setup instructions](http://docksal.readthedocs.io/en
 3. Point your browser to
 
     ```
-    http://vanilla.magento.docksal
+    http://boilerplate-magento.docksal
     ```
 
 ## PHPStorm settings
 
 Exclude next folders from index to improve performance of IDE:
 ```
-docroot/pub/media
+docroot/pub
 docroot/var
+docroot/vendor
 
 ```
 

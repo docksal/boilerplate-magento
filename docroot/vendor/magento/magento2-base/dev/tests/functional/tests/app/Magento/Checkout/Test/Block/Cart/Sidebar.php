@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Checkout\Test\Block\Cart;
@@ -16,11 +16,11 @@ use Magento\Mtf\Fixture\FixtureInterface;
 class Sidebar extends Block
 {
     /**
-     * Quantity input selector.
+     * Mini cart subtotal selector.
      *
      * @var string
      */
-    private $qty = '//*[@class="product"]/*[@title="%s"]/following-sibling::*//*[contains(@class,"item-qty")]';
+    private $subtotal = '.subtotal .price';
 
     /**
      * Mini cart link selector.
@@ -34,7 +34,14 @@ class Sidebar extends Block
      *
      * @var string
      */
-    protected $braintreePaypalCheckoutButton = './/button[contains(@id, "braintree-paypal-mini-cart")]';
+    protected $braintreePaypalCheckoutButton = 'button[id^="braintree-paypal-mini-cart"]';
+
+    /**
+     * Locator value for "Proceed to Checkout" button.
+     *
+     * @var string
+     */
+    private $proceedToCheckoutButton = '#top-cart-btn-checkout';
 
     /**
      * Minicart items quantity
@@ -42,6 +49,11 @@ class Sidebar extends Block
      * @var string
      */
     protected $productCounter = './/*[@class="counter-number"]';
+
+    /**
+     * @var string
+     */
+    protected $visibleProductCounter = './/*[@class="items-total"]';
 
     /**
      * Empty minicart message
@@ -86,7 +98,7 @@ class Sidebar extends Block
     protected $counterNumberWrapper = '.minicart-wrapper';
 
     /**
-     * Loading masc.
+     * Loading mask.
      *
      * @var string
      */
@@ -100,9 +112,12 @@ class Sidebar extends Block
     public function openMiniCart()
     {
         $this->waitCounterQty();
-        if (!$this->_rootElement->find($this->cartContent)->isVisible()) {
-            $this->_rootElement->find($this->cartLink)->click();
+        if (!$this->browser->find($this->cartContent)->isVisible()) {
+            $this->browser->find($this->cartLink)->click();
         }
+        // Need this because there are a lot of JS processes that update shopping cart items
+        // and we cant control them all
+        sleep(5);
     }
 
     /**
@@ -112,11 +127,28 @@ class Sidebar extends Block
      */
     public function clickBraintreePaypalButton()
     {
-        $button = $this->_rootElement->find($this->braintreePaypalCheckoutButton, Locator::SELECTOR_XPATH);
-        $this->browser->waitUntil(function () use ($button) {
-            return !$button->isDisabled() ?: null;
-        });
-        $button->click();
+        // Button can be enabled/disabled few times.
+        sleep(3);
+
+        $windowsCount = count($this->browser->getWindowHandles());
+        $this->_rootElement->find($this->braintreePaypalCheckoutButton)
+            ->click();
+        $browser = $this->browser;
+        $this->browser->waitUntil(
+            function () use ($browser, $windowsCount) {
+                return count($browser->getWindowHandles()) === ($windowsCount + 1) ? true: null;
+            }
+        );
+    }
+
+    /**
+     * Click "Proceed to Checkout" button.
+     *
+     * @return void
+     */
+    public function clickProceedToCheckoutButton()
+    {
+        $this->_rootElement->find($this->proceedToCheckoutButton)->click();
     }
 
     /**
@@ -137,7 +169,7 @@ class Sidebar extends Block
     }
 
     /**
-     * Get empty minicart message
+     * Get empty minicart message.
      *
      * @return string
      */
@@ -148,7 +180,7 @@ class Sidebar extends Block
     }
 
     /**
-     * Is minicart items quantity block visible
+     * Is minicart items quantity block visible.
      *
      * @return bool
      */
@@ -158,16 +190,36 @@ class Sidebar extends Block
     }
 
     /**
-     * Get product quantity.
+     * Get qty of items in minicart.
      *
-     * @param string $productName
+     * @return int
+     */
+    public function getItemsQty()
+    {
+        return (int)$this->_rootElement->find($this->productCounter, Locator::SELECTOR_XPATH)->getText();
+    }
+
+    /**
+     * Returns message with count of visible items
+     *
      * @return string
      */
-    public function getProductQty($productName)
+    public function getVisibleItemsCounter()
+    {
+        return $this->_rootElement->find($this->visibleProductCounter, Locator::SELECTOR_XPATH)->getText();
+    }
+
+    /**
+     * Get subtotal.
+     *
+     * @return string
+     */
+    public function getSubtotal()
     {
         $this->openMiniCart();
-        $productQty = sprintf($this->qty, $productName);
-        return $this->_rootElement->find($productQty, Locator::SELECTOR_XPATH)->getValue();
+        $subtotal = $this->_rootElement->find($this->subtotal)->getText();
+
+        return $this->escapeCurrency($subtotal);
     }
 
     /**
@@ -178,6 +230,7 @@ class Sidebar extends Block
      */
     public function getCartItem(FixtureInterface $product)
     {
+        $this->openMiniCart();
         $dataConfig = $product->getDataConfig();
         $typeId = isset($dataConfig['type_id']) ? $dataConfig['type_id'] : null;
         $cartItem = null;
@@ -190,7 +243,7 @@ class Sidebar extends Block
                 Locator::SELECTOR_XPATH
             );
             $cartItem = $this->blockFactory->create(
-                'Magento\Checkout\Test\Block\Cart\Sidebar\Item',
+                \Magento\Checkout\Test\Block\Cart\Sidebar\Item::class,
                 ['element' => $cartItemBlock]
             );
         }
@@ -223,5 +276,17 @@ class Sidebar extends Block
     public function waitLoader()
     {
         $this->waitForElementNotVisible($this->loadingMask);
+    }
+
+    /**
+     * Escape currency in price.
+     *
+     * @param string $price
+     * @param string $currency [optional]
+     * @return string
+     */
+    protected function escapeCurrency($price, $currency = '$')
+    {
+        return str_replace($currency, '', $price);
     }
 }

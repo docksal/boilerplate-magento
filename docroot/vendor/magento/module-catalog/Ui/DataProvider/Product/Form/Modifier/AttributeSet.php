@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2016 Magento. All rights reserved.
+ * Copyright © Magento, Inc. All rights reserved.
  * See COPYING.txt for license details.
  */
 namespace Magento\Catalog\Ui\DataProvider\Product\Form\Modifier;
@@ -14,6 +14,9 @@ use Magento\Ui\Component\Form\Field;
 
 /**
  * Add "Attribute Set" to first fieldset
+ *
+ * @api
+ * @since 101.0.0
  */
 class AttributeSet extends AbstractModifier
 {
@@ -26,16 +29,19 @@ class AttributeSet extends AbstractModifier
      * Set collection factory
      *
      * @var CollectionFactory
+     * @since 101.0.0
      */
     protected $attributeSetCollectionFactory;
 
     /**
      * @var UrlInterface
+     * @since 101.0.0
      */
     protected $urlBuilder;
 
     /**
      * @var LocatorInterface
+     * @since 101.0.0
      */
     protected $locator;
 
@@ -58,6 +64,7 @@ class AttributeSet extends AbstractModifier
      * Return options for select
      *
      * @return array
+     * @since 101.0.0
      */
     public function getOptions()
     {
@@ -71,11 +78,21 @@ class AttributeSet extends AbstractModifier
                 \Magento\Eav\Model\ResourceModel\Entity\Attribute\Set\Collection::SORT_ORDER_ASC
             );
 
-        return $collection->getData();
+        $collectionData = $collection->getData() ?? [];
+
+        array_walk(
+            $collectionData,
+            function (&$attribute) {
+                $attribute['__disableTmpl'] = true;
+            }
+        );
+
+        return $collectionData;
     }
 
     /**
-     * {@inheritdoc}
+     * @inheritdoc
+     * @since 101.0.0
      */
     public function modifyMeta(array $meta)
     {
@@ -100,6 +117,7 @@ class AttributeSet extends AbstractModifier
                     self::ATTRIBUTE_SET_FIELD_ORDER
                 ),
                 'multiple' => false,
+                'disabled' => $this->locator->getProduct()->isLockedAttribute('attribute_set_id'),
             ];
         }
 
@@ -107,16 +125,20 @@ class AttributeSet extends AbstractModifier
     }
 
     /**
-     * {@inheritdoc}
+     * @inheritdoc
+     * @since 101.0.0
      */
     public function modifyData(array $data)
     {
-        return array_replace_recursive($data, [
-            $this->locator->getProduct()->getId() => [
-                self::DATA_SOURCE_DEFAULT => [
-                    'attribute_set_id' => $this->locator->getProduct()->getAttributeSetId()
-                ],
+        return array_replace_recursive(
+            $data,
+            [
+                $this->locator->getProduct()->getId() => [
+                    self::DATA_SOURCE_DEFAULT => [
+                        'attribute_set_id' => $this->locator->getProduct()->getAttributeSetId()
+                    ],
+                ]
             ]
-        ]);
+        );
     }
 }
